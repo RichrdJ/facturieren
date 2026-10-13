@@ -70,6 +70,7 @@ button.lf{white-space:nowrap;width:100%;min-width:90px;text-align:left;padding:3
 .lpop .lvals{max-height:280px;overflow:auto}
 tr.tot th{color:var(--fg);font-size:14px;border-top:2px solid var(--line);border-bottom:0;padding-top:10px}
 .tcount{font-size:12px;margin-top:6px}
+.sumline{margin:-4px 0 10px;font-size:13px}.sumline b{font-variant-numeric:tabular-nums}
 #theme{background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;font-size:16px;line-height:1;padding:5px 9px}td.click{cursor:pointer;color:var(--acc-fg);text-decoration:underline}
 </style>
 </head>
@@ -253,7 +254,7 @@ async function report(){
     h+="</div>";
   }
   const ex=r.uitgesloten.length;
-  h+=`<div class=card><h2>VM's (${r.alle.length})${ex?` <small class=muted style="font-weight:400">· ${r.vms.length} op de facturatie, ${ex} uitgesloten</small>`:""}</h2><div class=wrap><table id=t-vms class=act data-sum="1,2,3"><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>Notitie</th><th class=l data-list>OS</th><th class=l data-list>Map</th><th></th></tr>"+
+  h+=`<div class=card><h2>VM's (${r.alle.length})${ex?` <small class=muted style="font-weight:400">· ${r.vms.length} op de facturatie, ${ex} uitgesloten</small>`:""}</h2><div class=sumline id=vms-sum></div><div class=wrap><table id=t-vms class=act data-sum="1,2,3" data-sum-target="vms-sum"><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>Notitie</th><th class=l data-list>OS</th><th class=l data-list>Map</th><th></th></tr>"+
     r.alle.map(x=>`<tr${x.uitgesloten?" class=excl":""}><td${x.uitgesloten?" class=strike":""}>${esc(x.servername)}</td>`+vmCols(x,x.uitgesloten)+noteCell(x)+osCell(x)+`<td class="l map" title="${esc(x.klant)}" data-f="${esc(x.klant)}"><small class=muted>${esc(x.klant)}</small></td>${actCell(x)}</tr>`).join("")+"</table></div></div>";
   $("#rep").innerHTML=h;
   // Wijzigingen: alleen sorteren; de VM-lijst krijgt ook de filterregel.
@@ -314,8 +315,13 @@ function enhance(table,key,filters){
     if(trow){
       const billed=rows.filter(r=>r.style.display!=="none"&&!r.classList.contains("excl"));
       const filtered=shown<body.length;
+      const sum=i=>billed.reduce((a,r)=>a+(Number(cellVal(r.cells[i]))||0),0);
       trow.innerHTML=ths.map((th,i)=>i===0?`<th class=l>Totaal${filtered?" (gefilterd)":""}: ${billed.length} VM's</th>`
-        :sumCols.includes(i)?`<th>${fmt(billed.reduce((a,r)=>a+(Number(cellVal(r.cells[i]))||0),0))}</th>`:"<th></th>").join("");
+        :sumCols.includes(i)?`<th>${fmt(sum(i))}</th>`:"<th></th>").join("");
+      // Dezelfde totalen compact boven de tabel.
+      const tgt=table.dataset.sumTarget&&document.getElementById(table.dataset.sumTarget);
+      if(tgt)tgt.innerHTML=`<span class=muted>Totaal${filtered?" (gefilterd)":""}:</span> <b>${billed.length}</b> VM's`+
+        sumCols.map(i=>` · <b>${fmt(sum(i))}</b> ${esc(ths[i].textContent.replace(/[▲▼]/g,"").trim())}`).join("");
     }
   }
   apply();
