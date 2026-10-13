@@ -172,6 +172,8 @@ const K=["vms","cpu","memory","storage"];
 const L={vms:"VM's",cpu:"CPU's",memory:"Memory GB",storage:"Storage GB"};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+// Maanden intern als JJJJ-MM, in beeld als MM-JJJJ.
+const dm=m=>/^\d{4}-\d{2}$/.test(m||"")?`${m.slice(5)}-${m.slice(0,4)}`:(m||"");
 const fmt=n=>Number(n).toLocaleString("nl-NL",{maximumFractionDigits:2});
 const delta=(a,b)=>{if(b==null)return"";const d=a-b;if(!d)return'<span class="muted">0</span>';return`<span class="${d>0?"up":"down"}">${d>0?"+":""}${fmt(d)}</span>`};
 const json=(method,body)=>({method,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
@@ -186,21 +188,21 @@ function show(t){document.querySelectorAll(".tabs button").forEach(b=>b.classLis
 
 async function loadMonths(keep){
   const ms=await api("/api/months");const sel=$("#maand");const cur=keep&&sel.value;
-  sel.innerHTML=ms.map(m=>`<option>${m.maand}</option>`).reverse().join("");
+  sel.innerHTML=ms.map(m=>`<option value="${m.maand}">${dm(m.maand)}</option>`).reverse().join("");
   if(cur&&ms.some(m=>m.maand===cur))sel.value=cur;
   $("#mlist").innerHTML="<tr><th>Maand</th><th class=l>Werkblad</th><th>VM's</th><th></th></tr>"+ms.slice().reverse().map(m=>
-    `<tr><td>${m.maand}</td><td class=l>${esc(m.werkblad||m.fout)}</td><td>${m.vms??""}</td><td><a href="/api/months/${m.maand}/xlsx"><button class="sec">Download xlsx</button></a> <button class="sec" onclick="delMonth('${m.maand}')">Verwijder</button></td></tr>`).join("");
+    `<tr><td>${dm(m.maand)}</td><td class=l>${esc(m.werkblad||m.fout)}</td><td>${m.vms??""}</td><td><a href="/api/months/${m.maand}/xlsx"><button class="sec">Download xlsx</button></a> <button class="sec" onclick="delMonth('${m.maand}')">Verwijder</button></td></tr>`).join("");
   if(!ms.length){show("upload");$("#ov").innerHTML="";return}
   refresh();
 }
-async function delMonth(m){if(confirm(`Export ${m} verwijderen?`)){await api("/api/months/"+m,{method:"DELETE"});loadMonths(true)}}
+async function delMonth(m){if(confirm(`Export ${dm(m)} verwijderen?`)){await api("/api/months/"+m,{method:"DELETE"});loadMonths(true)}}
 $("#maand").onchange=refresh;
 
 async function refresh(){
   const m=$("#maand").value;if(!m)return;
   const [ov,folders]=await Promise.all([api("/api/overview?maand="+m),api("/api/folders?maand="+m)]);
   $("#folders").innerHTML=folders.map(f=>`<option value="${esc(f.map)}">${f.vms} VM's</option>`).join("");
-  $("#ov-title").textContent=`Overzicht ${m}`+(ov.vorige_maand?` (verschil t.o.v. ${ov.vorige_maand})`:"");
+  $("#ov-title").textContent=`Overzicht ${dm(m)}`+(ov.vorige_maand?` (verschil t.o.v. ${dm(ov.vorige_maand)})`:"");
   let h="<tr><th>Klant</th>"+K.map(k=>`<th>${L[k]}</th>`).join("")+"<th>Mutaties</th></tr>";
   if(!ov.klanten.length)h+=`<tr><td colspan=10 class="muted l">Nog geen klanten. Zoek een klant op het tabblad Klant en klik op "Bewaar als klant".</td></tr>`;
   ov.klanten.forEach((k,i)=>{
@@ -226,7 +228,7 @@ const changeCell=(o,n)=>{const d=n-o,c=d>0?"up":"down";
 const noteOf=name=>notes[name.toLowerCase()]?.notitie||"";
 // Notitiekolom: reden van uitsluiting (rood) + vrije notitie.
 const noteCell=x=>{const n=noteOf(x.servername);
-  return`<td class=note>${x.uitgesloten?`<div class=reason>⊘ ${esc(x.opmerking||"uitgesloten")}${x.tot?` (t/m ${esc(x.tot)})`:""}</div>`:""}${n?`<div>${esc(n)}</div>`:""}</td>`};
+  return`<td class=note>${x.uitgesloten?`<div class=reason>⊘ ${esc(x.opmerking||"uitgesloten")}${x.tot?` (t/m ${esc(dm(x.tot))})`:""}</div>`:""}${n?`<div>${esc(n)}</div>`:""}</td>`};
 const actCell=(x,canExclude=true)=>`<td class=acts><button class="sec mini" title="Notitie" onclick="editNote('${esc(x.servername)}')">✎</button> ${
   x.uitgesloten?`<button class="sec mini" onclick="includeVm('${esc(x.servername)}')">Weer meenemen</button>`
   :canExclude?`<button class="sec mini" onclick="excludeVm('${esc(x.servername)}')">Uitsluiten</button>`:""}</td>`;
@@ -237,9 +239,9 @@ async function report(){
   const m=$("#maand").value,f=$("#f").value.trim();if(!f)return;
   let r;try{r=await api(`/api/report?maand=${m}&filter=${encodeURIComponent(f)}`)}catch(e){$("#rep").innerHTML=`<div class=card>${esc(e.message)}</div>`;return}
   lastReport=r;
-  let h=`<div class=card><h2>${esc(f)} – ${m}</h2><div class=wrap><table><tr><th></th>`+K.map(k=>`<th>${L[k]}</th>`).join("")+"</tr>";
-  h+=`<tr><td><b>${m}</b></td>`+K.map(k=>`<td><b>${fmt(r.totaal[k])}</b></td>`).join("")+"</tr>";
-  if(r.vorig_totaal){h+=`<tr><td class=muted>${r.vorige_maand}</td>`+K.map(k=>`<td class=muted>${fmt(r.vorig_totaal[k])}</td>`).join("")+"</tr>";
+  let h=`<div class=card><h2>${esc(f)} – ${dm(m)}</h2><div class=wrap><table><tr><th></th>`+K.map(k=>`<th>${L[k]}</th>`).join("")+"</tr>";
+  h+=`<tr><td><b>${dm(m)}</b></td>`+K.map(k=>`<td><b>${fmt(r.totaal[k])}</b></td>`).join("")+"</tr>";
+  if(r.vorig_totaal){h+=`<tr><td class=muted>${dm(r.vorige_maand)}</td>`+K.map(k=>`<td class=muted>${fmt(r.vorig_totaal[k])}</td>`).join("")+"</tr>";
     h+=`<tr><td>Verschil</td>`+K.map(k=>`<td>${delta(r.totaal[k],r.vorig_totaal[k])}</td>`).join("")+"</tr>";}
   h+="</table></div>";
   if(r.uitgesloten.length)h+=`<p class=muted>${r.uitgesloten.length} VM('s) uitgesloten (doorgestreept in de lijst hieronder). Die tellen niet mee.</p>`;
@@ -247,7 +249,7 @@ async function report(){
   h+="</div>";
   const v=r.verschil;
   if(v){
-    h+=`<div class=card><h2>Wijzigingen t.o.v. ${r.vorige_maand}</h2>`;
+    h+=`<div class=card><h2>Wijzigingen t.o.v. ${dm(r.vorige_maand)}</h2>`;
     const vu=v.uitgesloten||[];
     if(!v.nieuw.length&&!v.verwijderd.length&&!v.gewijzigd.length&&!vu.length)h+=`<p class=muted>Geen wijzigingen.</p>`;
     const vmrows=(rows,cls,lbl,act)=>rows.map(x=>`<tr><td><span class="pill ${cls}">${lbl}</span> ${esc(x.servername)}</td>`+vmCols(x)+noteCell(x)+osCell(x)+`<td class="l map" title="${esc(x.klant)}" data-f="${esc(x.klant)}"><small class=muted>${esc(x.klant)}</small></td>${actCell(x,act)}</tr>`).join("");
@@ -400,7 +402,7 @@ async function includeVm(name){
 async function saveExclusions(){exclusions=await api("/api/exclusions",json("PUT",exclusions));}
 function renderExclusions(){
   const m=$("#maand").value;
-  $("#excl").innerHTML="<tr><th class=l>Server</th><th class=l>Opmerking</th><th class=l>Vanaf</th><th class=l>T/m</th><th class=l>Status "+esc(m)+"</th><th></th></tr>"+
+  $("#excl").innerHTML="<tr><th class=l>Server</th><th class=l>Opmerking</th><th class=l>Vanaf</th><th class=l>T/m</th><th class=l>Status "+esc(dm(m))+"</th><th></th></tr>"+
     (exclusions.length?"":`<tr><td colspan=6 class="muted l">Nog geen uitsluitingen.</td></tr>`)+
     exclusions.map((x,i)=>{const act=x.vanaf<=m&&(!x.tot||m<=x.tot);
       return`<tr><td class=l><input value="${esc(x.servername)}" size="18" oninput="exclusions[${i}].servername=this.value"><br><small class=muted>${esc(x.klant)}</small></td>
@@ -426,7 +428,7 @@ async function upload(files){
   for(const file of files){
     const fd=new FormData();fd.append("file",file);fd.append("maand",files.length===1?$("#um").value:"");
     try{const r=await api("/api/upload",{method:"POST",body:fd});
-      $("#umsg").innerHTML+=`<div>✔ ${esc(file.name)} → ${r.maand} (${r.vms} VM's)${r.overschreven?" – vorige versie overschreven":""}</div>`;
+      $("#umsg").innerHTML+=`<div>✔ ${esc(file.name)} → ${dm(r.maand)} (${r.vms} VM's)${r.overschreven?" – vorige versie overschreven":""}</div>`;
     }catch(e){$("#umsg").innerHTML+=`<div class=down>✘ ${esc(file.name)}: ${esc(e.message)}</div>`}
   }
   $("#um").value="";await loadMonths(false);

@@ -161,6 +161,11 @@ def api_info():
 
 # ---------- opslag ----------
 
+def dm(month: str) -> str:
+    """'2026-10' -> '10-2026' voor weergave; intern blijft JJJJ-MM."""
+    return f"{month[5:]}-{month[:4]}" if month and MONTH_RE.match(month) else (month or "")
+
+
 def _month_path(month: str) -> Path:
     if not MONTH_RE.match(month):
         raise HTTPException(400, "Maand moet de vorm JJJJ-MM hebben")
@@ -174,7 +179,7 @@ def months() -> list[str]:
 def load(month: str) -> excel.Export:
     path = _month_path(month)
     if not path.exists():
-        raise HTTPException(404, f"Geen export voor {month}")
+        raise HTTPException(404, f"Geen export voor {dm(month)}")
     mtime = path.stat().st_mtime
     cached = _cache.get(month)
     if cached and cached[0] == mtime:
@@ -591,14 +596,14 @@ def api_export(maand: str, os: str = ""):
         s = wb.create_sheet("Uitgesloten")
         s.append(["servername", "klant", "reden uitsluiting", "t/m maand", *LABELS.values(), "Notitie"])
         for r in excluded:
-            s.append([r["servername"], r["klant"], r["opmerking"], r["tot"], *[r[x] for x in BILLED], note_for(r["servername"])])
+            s.append([r["servername"], r["klant"], r["opmerking"], dm(r["tot"]), *[r[x] for x in BILLED], note_for(r["servername"])])
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="facturatie {maand}{" (OS-filter)" if os else ""}.xlsx"'},
+        headers={"Content-Disposition": f'attachment; filename="facturatie {dm(maand)}{" (OS-filter)" if os else ""}.xlsx"'},
     )
 
 
