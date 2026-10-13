@@ -7,9 +7,9 @@
 <script src="/static/theme.js"></script>
 <style>
 :root{color-scheme:light;--bg:#f6f7f9;--card:#fff;--fg:#1d2330;--muted:#6b7280;--line:#e5e7eb;--acc:#c2185b;--acc-fg:#c2185b;--head:#c2185b;--up:#15803d;--down:#b91c1c;
-  --input:#fff;--hover:#f9fafb;--p-n:#dcfce7;--p-r:#fee2e2;--p-c:#fef3c7;--p:#eef}
+  --input:#fff;--hover:#f9fafb;--tint-up:rgba(21,128,61,.08);--tint-down:rgba(185,28,28,.08);--p-n:#dcfce7;--p-r:#fee2e2;--p-c:#fef3c7;--p:#eef}
 :root[data-theme=dark]{color-scheme:dark;--bg:#12151b;--card:#1b2029;--fg:#e6e8ec;--muted:#9aa3b2;--line:#2b323e;--acc:#d63a7a;--acc-fg:#f48fb8;--head:#7a1240;
-  --up:#4ade80;--down:#f87171;--input:#141820;--hover:#222834;--p-n:#14532d;--p-r:#7f1d1d;--p-c:#713f12;--p:#2a3350}
+  --up:#4ade80;--down:#f87171;--input:#141820;--hover:#222834;--tint-up:rgba(74,222,128,.10);--tint-down:rgba(248,113,113,.10);--p-n:#14532d;--p-r:#7f1d1d;--p-c:#713f12;--p:#2a3350}
 *{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
 header{background:var(--head);color:#fff;padding:12px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 header h1{font-size:18px;margin:0;margin-right:auto}
@@ -55,6 +55,11 @@ th.sort{cursor:pointer;user-select:none}th.sort:hover{color:var(--fg)}
 th.sort[data-dir]::after{content:" ▲";font-size:10px}th.sort[data-dir=desc]::after{content:" ▼"}
 tr.frow td{padding:4px 4px 8px;border-bottom:1px solid var(--line)}tr.frow input{width:100%;min-width:60px;padding:3px 6px;font-size:12px}
 tr.frow:hover td{background:transparent}
+td.chg.up{background:var(--tint-up)}td.chg.down{background:var(--tint-down)}
+tr:hover td.chg.up{background:var(--tint-up)}tr:hover td.chg.down{background:var(--tint-down)}
+.old{color:var(--muted);text-decoration:line-through}
+.dchip{display:inline-block;font-size:11px;font-weight:600;padding:0 6px;border-radius:8px;margin-left:2px}
+.dchip.up{background:var(--p-n);color:var(--up)}.dchip.down{background:var(--p-r);color:var(--down)}
 tr.frow td{text-align:left}
 button.lf{white-space:nowrap;width:100%;min-width:90px;text-align:left;padding:3px 8px;font-size:12px;
   background:var(--input);color:var(--fg);border:1px solid var(--line);border-radius:6px;display:flex;justify-content:space-between;gap:6px}button.lf.on{border-color:var(--acc-fg);color:var(--acc-fg)}
@@ -209,6 +214,9 @@ $("#dl").onclick=()=>location.href="/api/export?maand="+$("#maand").value;
 
 $("#go").onclick=report;$("#f").onkeydown=e=>{if(e.key==="Enter")report()};
 const vmCols=(x,strike)=>K.slice(1).map(k=>`<td${strike?" class=strike":""}>${fmt(x[k])}</td>`).join("");
+// Gewijzigde waarde: oud (doorgestreept) → nieuw in groen/rood, met het verschil erachter.
+const changeCell=(o,n)=>{const d=n-o,c=d>0?"up":"down";
+  return`<span class=old>${fmt(o)}</span> → <b class=${c}>${fmt(n)}</b> <span class="dchip ${c}">${d>0?"+":""}${fmt(d)}</span>`};
 const noteOf=name=>notes[name.toLowerCase()]?.notitie||"";
 // Notitiekolom: reden van uitsluiting (rood) + vrije notitie.
 const noteCell=x=>{const n=noteOf(x.servername);
@@ -240,7 +248,7 @@ async function report(){
     if(v.nieuw.length||v.verwijderd.length||v.gewijzigd.length||vu.length){
       h+=`<div class=wrap><table id=t-wijz class=act><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>Notitie</th><th class=l data-list>OS</th><th class=l data-list>Map</th><th></th></tr>";
       h+=vmrows(v.nieuw,"n","nieuw",true)+vmrows(v.verwijderd,"r","weg",false)+vmrows(vu,"x","⊘ uitgesloten",false);
-      h+=v.gewijzigd.map(x=>`<tr><td><span class="pill c">gewijzigd</span> ${esc(x.servername)}</td>`+K.slice(1).map(k=>`<td data-v="${x.nieuw[k]}">${x.delta[k]!=null?`${fmt(x.oud[k])} → <b>${fmt(x.nieuw[k])}</b>`:`<span class=muted>${fmt(x.nieuw[k])}</span>`}</td>`).join("")+noteCell(x)+osCell(x.nieuw)+`<td class="l map" title="${esc(x.klant)}" data-f="${esc(x.klant)}"><small class=muted>${x.verplaatst?`${esc(x.oud.klant)} → `:""}${esc(x.klant)}</small></td>${actCell(x)}</tr>`).join("");
+      h+=v.gewijzigd.map(x=>`<tr><td><span class="pill c">gewijzigd</span> ${esc(x.servername)}</td>`+K.slice(1).map(k=>`<td data-v="${x.nieuw[k]}"${x.delta[k]!=null?` class="chg ${x.delta[k]>0?"up":"down"}"`:""}>${x.delta[k]!=null?changeCell(x.oud[k],x.nieuw[k]):`<span class=muted>${fmt(x.nieuw[k])}</span>`}</td>`).join("")+noteCell(x)+osCell(x.nieuw)+`<td class="l map" title="${esc(x.klant)}" data-f="${esc(x.klant)}"><small class=muted>${x.verplaatst?`${esc(x.oud.klant)} → `:""}${esc(x.klant)}</small></td>${actCell(x)}</tr>`).join("");
       h+="</table></div>";
     }
     h+="</div>";
