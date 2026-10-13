@@ -226,8 +226,8 @@ def segments(path: str) -> list[str]:
 
 
 def matches(klant: str, pattern: str) -> bool:
-    """Klantfilter op mapniveau: 'Stadsbeheer' of 'Stadsbeheer/Almere' moet als hele
-    map(pen) in het pad voorkomen. Zo pakt 'GGZ' niet per ongeluk ook 'GGZ GV' mee."""
+    """Klantfilter op mapniveau: 'KlantA' of 'KlantA/Locatie1' moet als hele
+    map(pen) in het pad voorkomen. Zo pakt 'Klant' niet per ongeluk ook 'Klant Noord' mee."""
     pat = segments(pattern)
     path = segments(klant)
     if not pat:
