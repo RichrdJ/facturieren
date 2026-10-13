@@ -55,9 +55,12 @@ th.sort{cursor:pointer;user-select:none}th.sort:hover{color:var(--fg)}
 th.sort[data-dir]::after{content:" ▲";font-size:10px}th.sort[data-dir=desc]::after{content:" ▼"}
 tr.frow td{padding:4px 4px 8px;border-bottom:1px solid var(--line)}tr.frow input{width:100%;min-width:60px;padding:3px 6px;font-size:12px}
 tr.frow:hover td{background:transparent}
-button.lf{white-space:nowrap}button.lf.on{border-color:var(--acc-fg);color:var(--acc-fg)}
+tr.frow td{text-align:left}
+button.lf{white-space:nowrap;width:100%;min-width:90px;text-align:left;padding:3px 8px;font-size:12px;
+  background:var(--input);color:var(--fg);border:1px solid var(--line);border-radius:6px;display:flex;justify-content:space-between;gap:6px}button.lf.on{border-color:var(--acc-fg);color:var(--acc-fg)}
 .lpop{position:absolute;z-index:20;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:10px;
   box-shadow:0 8px 24px rgba(0,0,0,.25);width:min(420px,calc(100vw - 16px))}
+.lpop.wide{width:min(620px,calc(100vw - 16px))}
 .lpop input[type=search]{width:100%;margin-bottom:8px}
 .lpop label{display:flex;gap:6px;align-items:center;padding:3px 2px;font-size:13px;cursor:pointer}
 .lpop label span{flex:1}.lpop .all{border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:4px}
@@ -233,18 +236,18 @@ async function report(){
     h+=`<div class=card><h2>Wijzigingen t.o.v. ${r.vorige_maand}</h2>`;
     const vu=v.uitgesloten||[];
     if(!v.nieuw.length&&!v.verwijderd.length&&!v.gewijzigd.length&&!vu.length)h+=`<p class=muted>Geen wijzigingen.</p>`;
-    const vmrows=(rows,cls,lbl,act)=>rows.map(x=>`<tr><td><span class="pill ${cls}">${lbl}</span> ${esc(x.servername)}</td>`+vmCols(x)+noteCell(x)+osCell(x)+`<td class="l map" title="${esc(x.klant)}"><small class=muted>${esc(x.klant)}</small></td>${actCell(x,act)}</tr>`).join("");
+    const vmrows=(rows,cls,lbl,act)=>rows.map(x=>`<tr><td><span class="pill ${cls}">${lbl}</span> ${esc(x.servername)}</td>`+vmCols(x)+noteCell(x)+osCell(x)+`<td class="l map" title="${esc(x.klant)}" data-f="${esc(x.klant)}"><small class=muted>${esc(x.klant)}</small></td>${actCell(x,act)}</tr>`).join("");
     if(v.nieuw.length||v.verwijderd.length||v.gewijzigd.length||vu.length){
-      h+=`<div class=wrap><table id=t-wijz class=act><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>Notitie</th><th class=l data-list>OS</th><th class=l>Map</th><th></th></tr>";
+      h+=`<div class=wrap><table id=t-wijz class=act><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>Notitie</th><th class=l data-list>OS</th><th class=l data-list>Map</th><th></th></tr>";
       h+=vmrows(v.nieuw,"n","nieuw",true)+vmrows(v.verwijderd,"r","weg",false)+vmrows(vu,"x","⊘ uitgesloten",false);
-      h+=v.gewijzigd.map(x=>`<tr><td><span class="pill c">gewijzigd</span> ${esc(x.servername)}</td>`+K.slice(1).map(k=>`<td data-v="${x.nieuw[k]}">${x.delta[k]!=null?`${fmt(x.oud[k])} → <b>${fmt(x.nieuw[k])}</b>`:`<span class=muted>${fmt(x.nieuw[k])}</span>`}</td>`).join("")+noteCell(x)+osCell(x.nieuw)+`<td class="l map" title="${esc(x.klant)}"><small class=muted>${x.verplaatst?`${esc(x.oud.klant)} → `:""}${esc(x.klant)}</small></td>${actCell(x)}</tr>`).join("");
+      h+=v.gewijzigd.map(x=>`<tr><td><span class="pill c">gewijzigd</span> ${esc(x.servername)}</td>`+K.slice(1).map(k=>`<td data-v="${x.nieuw[k]}">${x.delta[k]!=null?`${fmt(x.oud[k])} → <b>${fmt(x.nieuw[k])}</b>`:`<span class=muted>${fmt(x.nieuw[k])}</span>`}</td>`).join("")+noteCell(x)+osCell(x.nieuw)+`<td class="l map" title="${esc(x.klant)}" data-f="${esc(x.klant)}"><small class=muted>${x.verplaatst?`${esc(x.oud.klant)} → `:""}${esc(x.klant)}</small></td>${actCell(x)}</tr>`).join("");
       h+="</table></div>";
     }
     h+="</div>";
   }
   const ex=r.uitgesloten.length;
-  h+=`<div class=card><h2>VM's (${r.alle.length})${ex?` <small class=muted style="font-weight:400">· ${r.vms.length} op de facturatie, ${ex} uitgesloten</small>`:""}</h2><div class=wrap><table id=t-vms class=act data-sum="1,2,3"><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>Notitie</th><th class=l data-list>OS</th><th class=l>Map</th><th></th></tr>"+
-    r.alle.map(x=>`<tr${x.uitgesloten?" class=excl":""}><td${x.uitgesloten?" class=strike":""}>${esc(x.servername)}</td>`+vmCols(x,x.uitgesloten)+noteCell(x)+osCell(x)+`<td class="l map" title="${esc(x.klant)}"><small class=muted>${esc(x.klant)}</small></td>${actCell(x)}</tr>`).join("")+"</table></div></div>";
+  h+=`<div class=card><h2>VM's (${r.alle.length})${ex?` <small class=muted style="font-weight:400">· ${r.vms.length} op de facturatie, ${ex} uitgesloten</small>`:""}</h2><div class=wrap><table id=t-vms class=act data-sum="1,2,3"><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>Notitie</th><th class=l data-list>OS</th><th class=l data-list>Map</th><th></th></tr>"+
+    r.alle.map(x=>`<tr${x.uitgesloten?" class=excl":""}><td${x.uitgesloten?" class=strike":""}>${esc(x.servername)}</td>`+vmCols(x,x.uitgesloten)+noteCell(x)+osCell(x)+`<td class="l map" title="${esc(x.klant)}" data-f="${esc(x.klant)}"><small class=muted>${esc(x.klant)}</small></td>${actCell(x)}</tr>`).join("")+"</table></div></div>";
   $("#rep").innerHTML=h;
   for(const id of ["wijz","vms"]){const t=$("#t-"+id);if(t)enhance(t,id,true)}
 }
@@ -298,7 +301,7 @@ function enhance(table,key,filters){
     for(const r of fixed)table.tBodies[0].appendChild(r);
     if(frow)frow.querySelectorAll("button.lf").forEach(b=>{const ex=st.ex[b.dataset.i]||[];
       const all=new Set(body.map(r=>listVal(r.cells[b.dataset.i])));const n=[...all].filter(v=>!ex.includes(v)).length;
-      b.textContent=ex.length?`${n} van ${all.size} ▾`:"Alle ▾";b.classList.toggle("on",!!ex.length)});
+      b.innerHTML=`<span>${ex.length?`${n} van ${all.size}`:"Alle"}</span><span>▾</span>`;b.classList.toggle("on",!!ex.length)});
     if(count)count.textContent=shown<body.length?`${shown} van ${body.length} getoond`:"";
     if(trow){
       const billed=rows.filter(r=>r.style.display!=="none"&&!r.classList.contains("excl"));
@@ -316,7 +319,7 @@ function listFilter(btn,body,st,i,apply){
   const counts=new Map();for(const r of body){const v=listVal(r.cells[i]);counts.set(v,(counts.get(v)||0)+1)}
   const vals=[...counts.keys()].sort((a,b)=>a==="(Leeg)"?1:b==="(Leeg)"?-1:a.localeCompare(b,"nl",{numeric:true}));
   const ex=new Set(st.ex[i]||[]);
-  const pop=document.createElement("div");pop.className="lpop";
+  const pop=document.createElement("div");pop.className="lpop"+(vals.some(v=>v.length>60)?" wide":"");
   pop.innerHTML=`<input type=search placeholder="Zoeken"><label class=all><input type=checkbox> (Alles selecteren)</label><div class=lvals>${
     vals.map((v,k)=>`<label data-v="${esc(v.toLowerCase())}"><input type=checkbox data-k="${k}"${ex.has(v)?"":" checked"}> <span>${esc(v)}</span> <small class=muted>${counts.get(v)}</small></label>`).join("")}</div>
     <div class=row style="justify-content:flex-end;margin-top:8px"><button type=button class="sec mini" data-a=close>Sluiten</button></div>`;

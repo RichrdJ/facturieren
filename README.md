@@ -17,7 +17,7 @@ Kleine webapp voor de maandelijkse facturatie op basis van de "VMs export 01-MM-
   lijst staan, met de reden, maar tellen niet mee. Onder de lijst staat een totaalregel die meerekent met je filters.
 - **Overzicht** van alle bewaarde klanten, met "Niet toegewezen" (VM's die onder geen klant vallen) en "Uitgesloten".
 - **Sorteren en filteren**: klik op een kolomkop om te sorteren; filter per kolom op tekst (`app`, `!test`)
-  of getal (`>=6`, `<100`, `8`). De kolom OS heeft een keuzelijst met vinkjes, zoals het filter in Excel.
+  of getal (`>=6`, `<100`, `8`). De kolommen OS en Map hebben een keuzelijst met vinkjes, zoals het filter in Excel.
 - **Licht/donker** wissel je met ☀/☾ rechtsboven.
 - **Download xlsx** per maand: de export als nette xlsx (getallen als getal, opgemaakte kop, filter,
   vastgezette eerste rij), als `VMs export 01-MM-JJJJ.xlsx`. Een CSV kan ook los worden omgezet zonder op te slaan.
