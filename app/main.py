@@ -457,15 +457,29 @@ async def api_convert(file: UploadFile = File(...)):
     )
 
 
+# Groepsmappen die geen klant zijn: alles tot en met deze map valt weg in de suggesties.
+GROUP_FOLDER = re.compile(r"customer vms$", re.I)
+
+
+def customer_path(klant: str) -> list[str]:
+    """'/CyberCenter/PRH Customer VMs/KlantA/Locatie1' -> ['KlantA', 'Locatie1'] (datacenter en groepsmap eraf)."""
+    segs = [s for s in klant.split("/") if s.strip()][1:]
+    if segs and GROUP_FOLDER.search(segs[0]):
+        segs = segs[1:]
+    return segs
+
+
 @app.get("/api/folders")
 def api_folders(maand: str):
-    """Alle klantmappen (zonder de datacenter-root) met aantal VM's, voor suggesties."""
-    count: Counter = Counter()
-    for r in load(maand).rows:
-        segs = [s for s in r["klant"].split("/") if s][1:]
+    """Klantnamen (en submappen) voor suggesties, met aantal VM's over alle datacenters samen."""
+    rows = load(maand).rows
+    names = set()
+    for r in rows:
+        segs = customer_path(r["klant"])
         for i in range(1, len(segs) + 1):
-            count["/".join(segs[:i])] += 1
-    return [{"map": k, "vms": v} for k, v in sorted(count.items())]
+            names.add("/".join(segs[:i]))
+    out = [{"map": n, "vms": sum(1 for r in rows if excel.matches(r["klant"], n))} for n in names]
+    return sorted(out, key=lambda x: x["map"].lower())
 
 
 class Customer(BaseModel):
