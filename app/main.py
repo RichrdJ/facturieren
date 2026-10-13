@@ -1,19 +1,21 @@
 """Facturieren: maandelijkse VM-export uploaden, per klant optellen en vergelijken met vorige maand."""
 from __future__ import annotations
 
-import base64
+import hashlib
+import hmac
 import io
 import json
 import os
 import re
 import secrets
 import threading
+import time
 from collections import Counter
 from pathlib import Path
 
 import openpyxl
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -23,8 +25,11 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 EXPORTS_DIR = DATA_DIR / "exports"
 CUSTOMERS_FILE = DATA_DIR / "klanten.json"
 STATIC_DIR = Path(__file__).parent / "static"
-APP_USER = os.environ.get("APP_USER", "admin")
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
+COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "").lower() in ("1", "true", "yes")
+COOKIE_NAME = "facturieren_sessie"
+APP_VERSION = os.environ.get("APP_VERSION", "dev")
+SESSION_DAYS = 30
 
 MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
 LABELS = {
@@ -43,20 +48,115 @@ _lock = threading.Lock()
 _cache: dict[str, tuple[float, excel.Export]] = {}
 
 
+# ---------- inloggen (alleen actief als APP_PASSWORD is gezet) ----------
+
+PUBLIC_PATHS = {"/login", "/api/login", "/healthz"}
+_fails: dict[str, list[float]] = {}  # per adres: [aantal mislukt, geblokkeerd tot]
+_global_fails: list[float] = []      # tijdstippen van recente mislukte pogingen
+_fails_lock = threading.Lock()
+
+
+def _secret_key() -> bytes:
+    """Sleutel voor het ondertekenen van de inlogcookie: één keer aanmaken en bewaren."""
+    path = DATA_DIR / "secret_key"
+    if not path.exists():
+        path.write_text(secrets.token_hex(32))
+    return path.read_text().strip().encode()
+
+
+SECRET_KEY = _secret_key()
+
+
+def _sign(expires: int) -> str:
+    # Het wachtwoord zit in de handtekening: wachtwoord veranderd = iedereen opnieuw inloggen.
+    msg = f"{expires}:{APP_PASSWORD}".encode()
+    return hmac.new(SECRET_KEY, msg, hashlib.sha256).hexdigest()
+
+
+def _logged_in(request: Request) -> bool:
+    expires, _, sig = request.cookies.get(COOKIE_NAME, "").partition(".")
+    if not expires.isdigit() or int(expires) < time.time():
+        return False
+    return hmac.compare_digest(sig, _sign(int(expires)))
+
+
+def _client(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for", "")
+    return fwd.split(",")[0].strip() or (request.client.host if request.client else "?")
+
+
+def _locked_for(ip: str) -> int:
+    now = time.time()
+    with _fails_lock:
+        _global_fails[:] = [t for t in _global_fails if now - t < 900]
+        until = _fails.get(ip, [0, 0])[1]
+        if len(_global_fails) >= 50:  # veel pogingen van overal: iedereen even afremmen
+            until = max(until, _global_fails[-1] + 60)
+    return max(0, int(until - now))
+
+
+def _register_fail(ip: str):
+    now = time.time()
+    with _fails_lock:
+        count = _fails.get(ip, [0, 0])[0] + 1
+        # na 5 fouten: 30 s wachten, daarna steeds twee keer zo lang (max 15 min)
+        wait = 0 if count < 5 else min(30 * 2 ** (count - 5), 900)
+        _fails[ip] = [count, now + wait]
+        _global_fails.append(now)
+
+
 @app.middleware("http")
-async def basic_auth(request: Request, call_next):
-    if APP_PASSWORD and request.url.path != "/healthz":
-        ok = False
-        header = request.headers.get("authorization", "")
-        if header.lower().startswith("basic "):
-            try:
-                user, _, pw = base64.b64decode(header[6:]).decode().partition(":")
-                ok = secrets.compare_digest(user, APP_USER) and secrets.compare_digest(pw, APP_PASSWORD)
-            except Exception:
-                ok = False
-        if not ok:
-            return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="Facturieren"'})
-    return await call_next(request)
+async def require_login(request: Request, call_next):
+    path = request.url.path
+    if not APP_PASSWORD or path in PUBLIC_PATHS or path.startswith("/static/") or _logged_in(request):
+        return await call_next(request)
+    if path.startswith("/api/"):
+        return JSONResponse({"detail": "Je bent niet (meer) ingelogd", "login": True}, status_code=401)
+    return RedirectResponse("/login", status_code=303)
+
+
+@app.get("/login")
+def login_page():
+    if not APP_PASSWORD:
+        return RedirectResponse("/", status_code=303)
+    return FileResponse(STATIC_DIR / "login.html")
+
+
+class Login(BaseModel):
+    password: str = ""
+
+
+@app.post("/api/login")
+async def api_login(body: Login, request: Request):
+    if not APP_PASSWORD:
+        return {"ok": True}
+    ip = _client(request)
+    wait = _locked_for(ip)
+    if wait:
+        return JSONResponse({"detail": f"Te vaak een verkeerd wachtwoord. Probeer het over {wait} seconden opnieuw."}, status_code=429)
+    if not hmac.compare_digest(body.password.encode(), APP_PASSWORD.encode()):
+        _register_fail(ip)
+        time.sleep(0.5)
+        return JSONResponse({"detail": "Dat wachtwoord klopt niet."}, status_code=401)
+    with _fails_lock:
+        _fails.pop(ip, None)
+    expires = int(time.time()) + SESSION_DAYS * 86400
+    resp = JSONResponse({"ok": True})
+    resp.set_cookie(COOKIE_NAME, f"{expires}.{_sign(expires)}", max_age=SESSION_DAYS * 86400,
+                    httponly=True, samesite="lax", secure=COOKIE_SECURE)
+    return resp
+
+
+@app.post("/api/logout")
+def api_logout():
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(COOKIE_NAME)
+    return resp
+
+
+@app.get("/api/info")
+def api_info():
+    return {"auth": bool(APP_PASSWORD), "versie": APP_VERSION}
 
 
 # ---------- opslag ----------

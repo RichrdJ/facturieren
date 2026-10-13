@@ -5,9 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Facturieren</title>
 <style>
-:root{--bg:#f6f7f9;--card:#fff;--fg:#1d2330;--muted:#6b7280;--line:#e5e7eb;--acc:#c2185b;--up:#15803d;--down:#b91c1c}
+:root{color-scheme:light;--bg:#f6f7f9;--card:#fff;--fg:#1d2330;--muted:#6b7280;--line:#e5e7eb;--acc:#c2185b;--acc-fg:#c2185b;--head:#c2185b;--up:#15803d;--down:#b91c1c;
+  --input:#fff;--hover:#f9fafb;--p-n:#dcfce7;--p-r:#fee2e2;--p-c:#fef3c7;--p:#eef}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#12151b;--card:#1b2029;--fg:#e6e8ec;--muted:#9aa3b2;--line:#2b323e;--acc:#d63a7a;--acc-fg:#f48fb8;--head:#7a1240;
+  --up:#4ade80;--down:#f87171;--input:#141820;--hover:#222834;--p-n:#14532d;--p-r:#7f1d1d;--p-c:#713f12;--p:#2a3350}}
 *{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
-header{background:var(--acc);color:#fff;padding:12px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+header{background:var(--head);color:#fff;padding:12px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 header h1{font-size:18px;margin:0;margin-right:auto}
 header select,header button{font:inherit}
 main{max-width:1200px;margin:0 auto;padding:16px}
@@ -18,16 +21,19 @@ th:first-child,td:first-child,.l{text-align:left}th{font-weight:600;color:var(--
 .wrap{overflow-x:auto}
 .up{color:var(--up)}.down{color:var(--down)}.muted{color:var(--muted)}
 button{background:var(--acc);color:#fff;border:0;border-radius:6px;padding:6px 12px;cursor:pointer}
-button.sec{background:#fff;color:var(--fg);border:1px solid var(--line)}
-input,select{padding:6px 8px;border:1px solid var(--line);border-radius:6px;font:inherit}
+button.sec{background:var(--card);color:var(--fg);border:1px solid var(--line)}
+input,select{padding:6px 8px;border:1px solid var(--line);border-radius:6px;font:inherit;background:var(--input);color:var(--fg)}
+header select{background:#fff;color:#1d2330;border-color:transparent}
+tr:hover td{background:var(--hover)}
+a{color:var(--acc-fg)}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .tabs button{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5)}
-.tabs button.on{background:#fff;color:var(--acc)}
+.tabs button.on{background:#fff;color:var(--head)}
 .drop{border:2px dashed var(--line);border-radius:8px;padding:24px;text-align:center;color:var(--muted)}
-.drop.over{border-color:var(--acc);color:var(--acc)}
-.pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;background:#eef}
-.pill.n{background:#dcfce7}.pill.r{background:#fee2e2}.pill.c{background:#fef3c7}
-.hidden{display:none}td.click{cursor:pointer;color:var(--acc);text-decoration:underline}
+.drop.over{border-color:var(--acc-fg);color:var(--acc-fg)}
+.pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;background:var(--p)}
+.pill.n{background:var(--p-n)}.pill.r{background:var(--p-r)}.pill.c{background:var(--p-c)}
+.hidden{display:none}td.click{cursor:pointer;color:var(--acc-fg);text-decoration:underline}
 </style>
 </head>
 <body>
@@ -40,6 +46,7 @@ input,select{padding:6px 8px;border:1px solid var(--line);border-radius:6px;font
     <button data-tab="upload">Exports</button>
   </div>
   <label>Maand <select id="maand"></select></label>
+  <button class="sec hidden" id="logout" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5)">Uitloggen</button>
 </header>
 <main>
 
@@ -75,7 +82,7 @@ input,select{padding:6px 8px;border:1px solid var(--line);border-radius:6px;font
 <section id="tab-upload" class="hidden">
   <div class="card">
     <h2>Export uploaden</h2>
-    <div class="drop" id="drop">Sleep hier de export (.csv of .xlsx) naartoe of <label style="color:var(--acc);cursor:pointer;text-decoration:underline">kies een bestand<input type="file" id="file" accept=".xlsx,.csv" multiple hidden></label></div>
+    <div class="drop" id="drop">Sleep hier de export (.csv of .xlsx) naartoe of <label style="color:var(--acc-fg);cursor:pointer;text-decoration:underline">kies een bestand<input type="file" id="file" accept=".xlsx,.csv" multiple hidden></label></div>
     <div class="row" style="margin-top:8px"><span class="muted">De maand wordt uit de bestandsnaam gehaald. Anders kies je hem hier:</span><input type="month" id="um"></div>
     <p id="umsg"></p>
   </div>
@@ -88,6 +95,7 @@ input,select{padding:6px 8px;border:1px solid var(--line);border-radius:6px;font
   <div class="card"><h2>Opgeslagen exports</h2><table id="mlist"></table></div>
 </section>
 
+  <footer class="muted" style="text-align:center;font-size:12px;padding:8px" id="versie"></footer>
 </main>
 <script>
 const K=["vms","cpu","memory","tier1_single","tier1_dual","tier3_dual","mgm","storage"];
@@ -96,7 +104,7 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt=n=>Number(n).toLocaleString("nl-NL",{maximumFractionDigits:2});
 const delta=(a,b)=>{if(b==null)return"";const d=a-b;if(!d)return'<span class="muted">0</span>';return`<span class="${d>0?"up":"down"}">${d>0?"+":""}${fmt(d)}</span>`};
-async function api(u,o){const r=await fetch(u,o);if(!r.ok){let m=r.statusText;try{m=(await r.json()).detail}catch{}throw new Error(m)}return r.json()}
+async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.replace("/login");throw new Error("Niet ingelogd")}if(!r.ok){let m=r.statusText;try{m=(await r.json()).detail}catch{}throw new Error(m)}return r.json()}
 let customers=[];
 
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>show(b.dataset.tab));
@@ -184,6 +192,7 @@ async function upload(files){
 }
 $("#conv").onchange=async e=>{const file=e.target.files[0];if(!file)return;const fd=new FormData();fd.append("file",file);
   const r=await fetch("/api/convert",{method:"POST",body:fd});
+  if(r.status===401){location.replace("/login");return}
   if(!r.ok){$("#cmsg").textContent="Mislukt: "+((await r.json().catch(()=>({}))).detail||r.statusText);return}
   const name=(r.headers.get("content-disposition")||"").match(/filename="(.+)"/)?.[1]||"export.xlsx";
   const a=document.createElement("a");a.href=URL.createObjectURL(await r.blob());a.download=name;a.click();
@@ -192,7 +201,9 @@ $("#file").onchange=e=>upload([...e.target.files]);
 const d=$("#drop");d.ondragover=e=>{e.preventDefault();d.classList.add("over")};d.ondragleave=()=>d.classList.remove("over");
 d.ondrop=e=>{e.preventDefault();d.classList.remove("over");upload([...e.dataTransfer.files])};
 
-(async()=>{customers=await api("/api/customers");renderCustomers();await loadMonths(false)})();
+$("#logout").onclick=async()=>{await fetch("/api/logout",{method:"POST"});location.replace("/login")};
+(async()=>{const info=await api("/api/info");if(info.auth)$("#logout").classList.remove("hidden");
+  $("#versie").innerHTML=`Facturieren <a href="https://github.com/RichrdJ/facturieren/releases" target="_blank" rel="noopener">${esc(info.versie)}</a>`;customers=await api("/api/customers");renderCustomers();await loadMonths(false)})();
 </script>
 </body>
 </html>

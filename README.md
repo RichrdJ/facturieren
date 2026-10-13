@@ -20,8 +20,8 @@ Kleine webapp voor de maandelijkse facturatie op basis van de "VMs export 01-MM-
 
 ### Docker Swarm (stack)
 
-Het image wordt bij elke push naar `main` automatisch gebouwd door GitHub Actions en gepubliceerd als
-`ghcr.io/richrdj/facturieren:latest`.
+Het image wordt door GitHub Actions gebouwd. `ghcr.io/richrdj/facturieren:latest` wijst altijd naar de
+laatste release; elke release heeft ook een eigen tag, bijv. `:1.0.0`. Zie [Releases](https://github.com/RichrdJ/facturieren/releases).
 
 ```bash
 docker stack deploy -c docker-stack.yml facturieren
@@ -45,10 +45,26 @@ docker compose up -d --build
 
 Open daarna http://localhost:9898. Data staat in `./data` (exports + `klanten.json`).
 
-### Wachtwoord
+## Inloggen
 
-Zet `APP_PASSWORD` (en eventueel `APP_USER`, standaard `admin`) om de app achter basic auth te zetten.
-Doe dit zeker als de container niet alleen op je eigen machine draait.
+Zet een wachtwoord met `APP_PASSWORD` in `docker-stack.yml` (of `docker-compose.yml`) en deploy opnieuw.
+De app toont dan een inlogpagina.
+
+- Een browser logt één keer in en blijft 30 dagen ingelogd. Uitloggen kan rechtsboven.
+- Wachtwoord veranderd? Dan moet iedereen opnieuw inloggen.
+- Na 5 verkeerde pogingen moet je even wachten, en steeds langer bij nieuwe fouten.
+- Draait de app via https (bijv. achter een reverse proxy), zet dan ook `COOKIE_SECURE=true`.
+- Zonder `APP_PASSWORD` werkt alles zonder inloggen.
+
+## Nieuwe release maken
+
+Schrijf de notes in `docs/releases/vX.Y.Z.md`, commit, en push een tag:
+
+```bash
+git tag v1.1.0 && git push origin v1.1.0
+```
+
+GitHub Actions bouwt dan het image (`:1.1.0`, `:1.1`, `:latest`) en maakt de release aan.
 
 ## Let op
 

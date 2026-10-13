@@ -7,7 +7,7 @@ services:
     volumes:
       - ./data:/data
     environment:
-      # Leeg = geen wachtwoord. Zet dit als de app niet alleen lokaal draait.
-      APP_USER: admin
+      # Wachtwoord voor de app; laat leeg om zonder inloggen te werken.
       APP_PASSWORD: ""
+      COOKIE_SECURE: "false"
     restart: unless-stopped

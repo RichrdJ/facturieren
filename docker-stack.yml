@@ -10,9 +10,10 @@ services:
     volumes:
       - data:/data
     environment:
-      APP_USER: admin
-      # Leeg = geen wachtwoord. Zet dit als de app vanaf het netwerk bereikbaar is.
+      # Wachtwoord voor de app; laat leeg om zonder inloggen te werken.
       APP_PASSWORD: ""
+      # Zet op "true" als de app via https draait (bijv. achter een reverse proxy).
+      COOKIE_SECURE: "false"
     deploy:
       # Eén replica: de exports staan in een lokaal volume op de node.
       replicas: 1
