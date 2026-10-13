@@ -249,7 +249,8 @@ async function report(){
   h+=`<div class=card><h2>VM's (${r.alle.length})${ex?` <small class=muted style="font-weight:400">· ${r.vms.length} op de facturatie, ${ex} uitgesloten</small>`:""}</h2><div class=wrap><table id=t-vms class=act data-sum="1,2,3"><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>Notitie</th><th class=l data-list>OS</th><th class=l data-list>Map</th><th></th></tr>"+
     r.alle.map(x=>`<tr${x.uitgesloten?" class=excl":""}><td${x.uitgesloten?" class=strike":""}>${esc(x.servername)}</td>`+vmCols(x,x.uitgesloten)+noteCell(x)+osCell(x)+`<td class="l map" title="${esc(x.klant)}" data-f="${esc(x.klant)}"><small class=muted>${esc(x.klant)}</small></td>${actCell(x)}</tr>`).join("")+"</table></div></div>";
   $("#rep").innerHTML=h;
-  for(const id of ["wijz","vms"]){const t=$("#t-"+id);if(t)enhance(t,id,true)}
+  // Wijzigingen: alleen sorteren; de VM-lijst krijgt ook de filterregel.
+  for(const id of ["wijz","vms"]){const t=$("#t-"+id);if(t)enhance(t,id,id==="vms")}
 }
 
 // ---- sorteren en filteren van tabellen ----
@@ -268,7 +269,7 @@ function matchFilter(c,expr){
   return expr.startsWith("!")?!hay.includes(expr.slice(1).trim().toLowerCase()):hay.includes(expr.toLowerCase());
 }
 function enhance(table,key,filters){
-  const st=tstate[key]??={col:null,dir:"asc",f:{},ex:{}};st.ex??={};
+  const st=tstate[key]??={col:null,dir:"asc",f:{},ex:{}};st.ex??={};if(!filters){st.f={};st.ex={}}
   const head=table.rows[0];const ths=[...head.cells];
   const body=[...table.rows].slice(1).filter(r=>!r.classList.contains("fixed"));
   const fixed=[...table.rows].slice(1).filter(r=>r.classList.contains("fixed"));
