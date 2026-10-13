@@ -25,6 +25,7 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 EXPORTS_DIR = DATA_DIR / "exports"
 CUSTOMERS_FILE = DATA_DIR / "klanten.json"
 EXCLUSIONS_FILE = DATA_DIR / "uitsluitingen.json"
+NOTES_FILE = DATA_DIR / "notities.json"
 STATIC_DIR = Path(__file__).parent / "static"
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "").lower() in ("1", "true", "yes")
@@ -200,6 +201,17 @@ def get_exclusions() -> list[dict]:
     return []
 
 
+def get_notes() -> dict[str, dict]:
+    """Notities per VM (sleutel: servernaam in kleine letters), los van maanden."""
+    if NOTES_FILE.exists():
+        return json.loads(NOTES_FILE.read_text())
+    return {}
+
+
+def note_for(servername: str) -> str:
+    return get_notes().get(servername.lower(), {}).get("notitie", "")
+
+
 def active_exclusions(month: str) -> dict[str, dict]:
     """Uitsluitingen die in deze maand gelden, per servernaam (hoofdletterongevoelig)."""
     return {
@@ -277,7 +289,7 @@ def compare_month(month: str, os_filter: str) -> tuple[str | None, bool]:
     return prev, bool(prev)
 
 
-def diff(cur: list[dict], prev: list[dict]) -> dict:
+def diff(cur: list[dict], prev: list[dict], excluded: list[dict] | None = None) -> dict:
     # Servernamen zijn niet altijd uniek; daarom per (naam, volgnummer) koppelen.
     def keyed(rows):
         seen: Counter = Counter()
@@ -297,20 +309,29 @@ def diff(cur: list[dict], prev: list[dict]) -> dict:
             moved = c[k]["klant"] != p[k]["klant"]
             if d or moved:
                 changed.append({"servername": k[0], "klant": c[k]["klant"], "oud": p[k], "nieuw": c[k], "delta": d, "verplaatst": moved})
-    return {"nieuw": added, "verwijderd": removed, "gewijzigd": changed}
+    # VM's die nog bestaan maar deze maand zijn uitgesloten, zijn niet "weg": apart tonen.
+    excl = {r["servername"].lower(): r for r in (excluded or [])}
+    newly_excluded = [{**excl[r["servername"].lower()], "uitgesloten": True} for r in removed if r["servername"].lower() in excl]
+    removed = [r for r in removed if r["servername"].lower() not in excl]
+    return {"nieuw": added, "verwijderd": removed, "gewijzigd": changed, "uitgesloten": newly_excluded}
 
 
 def report(month: str, pattern: str, os_filter: str = "") -> dict:
-    rows, excluded = billable(month, pattern, os_filter)
+    matched = select(load(month), pattern, os_filter)
+    rows, excluded = split_excluded(matched, month)
+    excl_names = {r["servername"].lower(): r for r in excluded}
+    # Alle VM's in exportvolgorde; uitgesloten VM's blijven zichtbaar maar tellen niet mee.
+    alle = [{**excl_names[r["servername"].lower()], "uitgesloten": True} if r["servername"].lower() in excl_names
+            else {**r, "uitgesloten": False} for r in matched]
     prev_month, comparable = compare_month(month, os_filter)
     result = {
         "maand": month, "filter": pattern, "os": os_filter, "totaal": totals(rows), "vms": rows,
-        "uitgesloten": excluded, "vorige_maand": prev_month, "vorige_zonder_os": bool(prev_month) and not comparable,
+        "uitgesloten": excluded, "alle": alle, "vorige_maand": prev_month, "vorige_zonder_os": bool(prev_month) and not comparable,
     }
     if comparable:
         prev_rows, _ = billable(prev_month, pattern, os_filter)
         result["vorig_totaal"] = totals(prev_rows)
-        result["verschil"] = diff(rows, prev_rows)
+        result["verschil"] = diff(rows, prev_rows, excluded)
     return result
 
 
@@ -332,7 +353,7 @@ def overview(month: str, os_filter: str = "") -> dict:
         if comparable:
             prev_rows, _ = billable(prev_month, c["filter"], os_c)
             regel["vorig_totaal"] = totals(prev_rows)
-            d = diff(rows, prev_rows)
+            d = diff(rows, prev_rows, excluded)
             regel["mutaties"] = {k: len(v) for k, v in d.items()}
         regels.append(regel)
     in_scope = [r for r in export.rows if os_matches(r["os"], os_filter)]
@@ -496,6 +517,32 @@ def api_save_exclusions(exclusions: list[Exclusion]):
     return data
 
 
+class Note(BaseModel):
+    servername: str
+    notitie: str = ""
+
+
+@app.get("/api/notes")
+def api_notes():
+    return get_notes()
+
+
+@app.put("/api/notes")
+def api_save_note(note: Note):
+    """Eén notitie zetten; een lege notitie verwijdert hem."""
+    name = note.servername.strip()
+    if not name:
+        raise HTTPException(400, "Servernaam ontbreekt")
+    with _lock:
+        notes = get_notes()
+        if note.notitie.strip():
+            notes[name.lower()] = {"servername": name, "notitie": note.notitie.strip()}
+        else:
+            notes.pop(name.lower(), None)
+        NOTES_FILE.write_text(json.dumps(notes, indent=2, ensure_ascii=False))
+    return notes
+
+
 @app.get("/api/report")
 def api_report(maand: str, filter: str, os: str = ""):
     return report(maand, filter, os)
@@ -535,16 +582,16 @@ def api_export(maand: str, os: str = ""):
             title = title[:28] + str(len(used))
         used.add(title)
         s = wb.create_sheet(title)
-        s.append(["servername", "OS", "klant", "cluster", *LABELS.values()])
+        s.append(["servername", "OS", "klant", "cluster", *LABELS.values(), "Notitie"])
         rows, _ = billable(maand, k["filter"], os)
         for r in rows:
-            s.append([r["servername"], r["os"], r["klant"], r["cluster"], *[r[x] for x in BILLED]])
+            s.append([r["servername"], r["os"], r["klant"], r["cluster"], *[r[x] for x in BILLED], note_for(r["servername"])])
     _, excluded = split_excluded([r for r in load(maand).rows if os_matches(r["os"], os)], maand)
     if excluded:
         s = wb.create_sheet("Uitgesloten")
-        s.append(["servername", "klant", "opmerking", "t/m maand", *LABELS.values()])
+        s.append(["servername", "klant", "reden uitsluiting", "t/m maand", *LABELS.values(), "Notitie"])
         for r in excluded:
-            s.append([r["servername"], r["klant"], r["opmerking"], r["tot"], *[r[x] for x in BILLED]])
+            s.append([r["servername"], r["klant"], r["opmerking"], r["tot"], *[r[x] for x in BILLED], note_for(r["servername"])])
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)

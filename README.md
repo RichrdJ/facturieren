@@ -13,6 +13,8 @@ Kleine webapp voor de maandelijkse facturatie op basis van de "VMs export 01-MM-
 - **Wijzigingen** per klant: nieuwe VM's, verwijderde VM's en VM's met andere CPU/memory/storage.
 - **Uitsluiten**: zet een VM (tijdelijk) niet op de facturatie, met een opmerking, bijv. "uitgerold 02-10, factureren
   vanaf november". Geldt vanaf de gekozen maand, optioneel t/m een maand; daarna telt hij vanzelf weer mee.
+- **Notitie per VM** (✎): blijft bij de VM staan, ook in volgende maanden. Uitgesloten VM's blijven doorgestreept in de
+  lijst staan, met de reden, maar tellen niet mee. Onder de lijst staat een totaalregel die meerekent met je filters.
 - **Overzicht** van alle bewaarde klanten, met "Niet toegewezen" (VM's die onder geen klant vallen) en "Uitgesloten".
 - **Sorteren en filteren**: klik op een kolomkop om te sorteren; filter per kolom op tekst (`webapps`, `!acc`)
   of getal (`>=6`, `<100`, `8`).
@@ -48,7 +50,7 @@ service op de node blijft waar het volume staat.
 docker compose up -d --build
 ```
 
-Open daarna http://localhost:9898. Data staat in `./data` (exports, `klanten.json`, `uitsluitingen.json`).
+Open daarna http://localhost:9898. Data staat in `./data` (exports, `klanten.json`, `uitsluitingen.json`, `notities.json`).
 
 ## Inloggen
 
