@@ -15,6 +15,9 @@ Kleine webapp voor de maandelijkse facturatie op basis van de "VMs export 01-MM-
 - **Uitsluiten**: zet een VM (tijdelijk) niet op de facturatie, met een opmerking, bijv. "uitgerold 02-10, factureren
   vanaf november". Geldt vanaf de gekozen maand, optioneel t/m een maand; daarna telt hij vanzelf weer mee.
 - **Overzicht** van alle bewaarde klanten, met "Niet toegewezen" (VM's die onder geen klant vallen) en "Uitgesloten".
+- **Sorteren en filteren**: klik op een kolomkop om te sorteren; filter per kolom op tekst (`webapps`, `!(leeg)`)
+  of getal (`>=6`, `<100`, `8`).
+- **Licht/donker** wissel je met ☀/☾ rechtsboven.
 - **Download xlsx** per maand: de export als nette xlsx (getallen als getal, opgemaakte kop, filter,
   vastgezette eerste rij), als `VMs export 01-MM-JJJJ.xlsx`. Een CSV kan ook los worden omgezet zonder op te slaan.
 - **Download Excel** met het overzicht en per klant een tabblad met de VM's.

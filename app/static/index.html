@@ -4,11 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Facturieren</title>
+<script src="/static/theme.js"></script>
 <style>
 :root{color-scheme:light;--bg:#f6f7f9;--card:#fff;--fg:#1d2330;--muted:#6b7280;--line:#e5e7eb;--acc:#c2185b;--acc-fg:#c2185b;--head:#c2185b;--up:#15803d;--down:#b91c1c;
   --input:#fff;--hover:#f9fafb;--p-n:#dcfce7;--p-r:#fee2e2;--p-c:#fef3c7;--p:#eef}
-@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#12151b;--card:#1b2029;--fg:#e6e8ec;--muted:#9aa3b2;--line:#2b323e;--acc:#d63a7a;--acc-fg:#f48fb8;--head:#7a1240;
-  --up:#4ade80;--down:#f87171;--input:#141820;--hover:#222834;--p-n:#14532d;--p-r:#7f1d1d;--p-c:#713f12;--p:#2a3350}}
+:root[data-theme=dark]{color-scheme:dark;--bg:#12151b;--card:#1b2029;--fg:#e6e8ec;--muted:#9aa3b2;--line:#2b323e;--acc:#d63a7a;--acc-fg:#f48fb8;--head:#7a1240;
+  --up:#4ade80;--down:#f87171;--input:#141820;--hover:#222834;--p-n:#14532d;--p-r:#7f1d1d;--p-c:#713f12;--p:#2a3350}
 *{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
 header{background:var(--head);color:#fff;padding:12px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 header h1{font-size:18px;margin:0;margin-right:auto}
@@ -42,7 +43,13 @@ dialog label span{font-weight:400;color:var(--muted);font-size:12px}
 .pill.x{background:var(--line)}
 button.mini{padding:2px 8px;font-size:12px}
 tr.excl td{opacity:.75}
-td.os{max-width:220px;overflow:hidden;text-overflow:ellipsis}td.click{cursor:pointer;color:var(--acc-fg);text-decoration:underline}
+td.os{max-width:220px;overflow:hidden;text-overflow:ellipsis}
+th.sort{cursor:pointer;user-select:none}th.sort:hover{color:var(--fg)}
+th.sort[data-dir]::after{content:" ▲";font-size:10px}th.sort[data-dir=desc]::after{content:" ▼"}
+tr.frow td{padding:4px 4px 8px;border-bottom:1px solid var(--line)}tr.frow input{width:100%;min-width:60px;padding:3px 6px;font-size:12px}
+tr.frow:hover td{background:transparent}
+.tcount{font-size:12px;margin-top:6px}
+#theme{background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;font-size:16px;line-height:1;padding:5px 9px}td.click{cursor:pointer;color:var(--acc-fg);text-decoration:underline}
 </style>
 </head>
 <body>
@@ -55,6 +62,7 @@ td.os{max-width:220px;overflow:hidden;text-overflow:ellipsis}td.click{cursor:poi
     <button data-tab="upload">Exports</button>
   </div>
   <label>Maand <select id="maand"></select></label>
+  <button id="theme" title="Licht/donker">☾</button>
   <button class="sec hidden" id="logout" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5)">Uitloggen</button>
 </header>
 <main>
@@ -165,10 +173,10 @@ async function refresh(){
     h+=`<tr><td class="click" data-i="${i}">${esc(k.naam)}${k.os?` <small class=muted>(${esc(k.os)})</small>`:""}</td>`+K.map(x=>`<td>${fmt(k.totaal[x])}<br><small>${delta(k.totaal[x],k.vorig_totaal?.[x])}</small></td>`).join("");
     const mu=k.mutaties;h+=`<td>${mu?`<span class="pill n">+${mu.nieuw}</span> <span class="pill r">−${mu.verwijderd}</span> <span class="pill c">~${mu.gewijzigd}</span>`:""}${k.uitgesloten?` <span class="pill x" title="uitgesloten VM's">⊘ ${k.uitgesloten}</span>`:""} <button class="sec mini" title="Klant uit overzicht halen" onclick="removeCustomer(${i})">×</button></td></tr>`;
   });
-  h+=`<tr><td class="muted">Niet toegewezen</td>`+K.map(x=>`<td class="muted">${fmt(ov.niet_toegewezen[x])}</td>`).join("")+"<td></td></tr>";
-  if(ov.uitgesloten.vms)h+=`<tr><td class="muted">Uitgesloten</td>`+K.map(x=>`<td class="muted">${fmt(ov.uitgesloten[x])}</td>`).join("")+"<td></td></tr>";
-  h+=`<tr><th>Totaal export</th>`+K.map(x=>`<th>${fmt(ov.alles[x])}</th>`).join("")+"<th></th></tr>";
-  $("#ov").innerHTML=h;
+  h+=`<tr class=fixed><td class="muted">Niet toegewezen</td>`+K.map(x=>`<td class="muted">${fmt(ov.niet_toegewezen[x])}</td>`).join("")+"<td></td></tr>";
+  if(ov.uitgesloten.vms)h+=`<tr class=fixed><td class="muted">Uitgesloten</td>`+K.map(x=>`<td class="muted">${fmt(ov.uitgesloten[x])}</td>`).join("")+"<td></td></tr>";
+  h+=`<tr class=fixed><th>Totaal export</th>`+K.map(x=>`<th>${fmt(ov.alles[x])}</th>`).join("")+"<th></th></tr>";
+  $("#ov").innerHTML=h;enhance($("#ov"),"ov",false);
   $("#ov").querySelectorAll("td.click").forEach(td=>td.onclick=()=>{const k=ov.klanten[td.dataset.i];
     $("#f").value=k.filter;$("#fos").value=[k.os,os].filter(Boolean).join(",");show("klant");report()});
   if($("#f").value)report();
@@ -201,20 +209,65 @@ async function report(){
     if(!v.nieuw.length&&!v.verwijderd.length&&!v.gewijzigd.length)h+=`<p class=muted>Geen wijzigingen.</p>`;
     const vmrows=(rows,cls,lbl,act)=>rows.map(x=>`<tr><td><span class="pill ${cls}">${lbl}</span> ${esc(x.servername)}</td>`+vmCols(x)+osCell(x)+`<td class=l><small class=muted>${esc(x.klant)}</small></td><td>${act?`<button class="sec mini" onclick="excludeVm('${esc(x.servername)}')">Uitsluiten</button>`:""}</td></tr>`).join("");
     if(v.nieuw.length||v.verwijderd.length||v.gewijzigd.length){
-      h+=`<div class=wrap><table><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>OS</th><th class=l>Map</th><th></th></tr>";
+      h+=`<div class=wrap><table id=t-wijz><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>OS</th><th class=l>Map</th><th></th></tr>";
       h+=vmrows(v.nieuw,"n","nieuw",true)+vmrows(v.verwijderd,"r","weg",false);
-      h+=v.gewijzigd.map(x=>`<tr><td><span class="pill c">gewijzigd</span> ${esc(x.servername)}</td>`+K.slice(1).map(k=>`<td>${x.delta[k]!=null?`${fmt(x.oud[k])} → <b>${fmt(x.nieuw[k])}</b>`:`<span class=muted>${fmt(x.nieuw[k])}</span>`}</td>`).join("")+osCell(x.nieuw)+`<td class=l><small class=muted>${x.verplaatst?`${esc(x.oud.klant)} → `:""}${esc(x.klant)}</small></td><td><button class="sec mini" onclick="excludeVm('${esc(x.servername)}')">Uitsluiten</button></td></tr>`).join("");
+      h+=v.gewijzigd.map(x=>`<tr><td><span class="pill c">gewijzigd</span> ${esc(x.servername)}</td>`+K.slice(1).map(k=>`<td data-v="${x.nieuw[k]}">${x.delta[k]!=null?`${fmt(x.oud[k])} → <b>${fmt(x.nieuw[k])}</b>`:`<span class=muted>${fmt(x.nieuw[k])}</span>`}</td>`).join("")+osCell(x.nieuw)+`<td class=l><small class=muted>${x.verplaatst?`${esc(x.oud.klant)} → `:""}${esc(x.klant)}</small></td><td><button class="sec mini" onclick="excludeVm('${esc(x.servername)}')">Uitsluiten</button></td></tr>`).join("");
       h+="</table></div>";
     }
     h+="</div>";
   }
   if(r.uitgesloten.length){
-    h+=`<div class=card><h2>Uitgesloten (${r.uitgesloten.length})</h2><div class=wrap><table><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>OS</th><th class=l>Opmerking</th><th></th></tr>"+
+    h+=`<div class=card><h2>Uitgesloten (${r.uitgesloten.length})</h2><div class=wrap><table id=t-excl><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>OS</th><th class=l>Opmerking</th><th></th></tr>"+
       r.uitgesloten.map(x=>`<tr class=excl><td><span class="pill x">⊘</span> ${esc(x.servername)}</td>`+vmCols(x)+osCell(x)+`<td class=l>${esc(x.opmerking)}${x.tot?` <small class=muted>(t/m ${esc(x.tot)})</small>`:""}</td><td><button class="sec mini" onclick="includeVm('${esc(x.servername)}')">Weer meenemen</button></td></tr>`).join("")+"</table></div></div>";
   }
-  h+=`<div class=card><h2>VM's op de facturatie (${r.vms.length})</h2><div class=wrap><table><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>OS</th><th class=l>Map</th><th></th></tr>"+
+  h+=`<div class=card><h2>VM's op de facturatie (${r.vms.length})</h2><div class=wrap><table id=t-vms><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>OS</th><th class=l>Map</th><th></th></tr>"+
     r.vms.map(x=>`<tr><td>${esc(x.servername)}</td>`+vmCols(x)+osCell(x)+`<td class=l><small class=muted>${esc(x.klant)}</small></td><td><button class="sec mini" onclick="excludeVm('${esc(x.servername)}')">Uitsluiten</button></td></tr>`).join("")+"</table></div></div>";
   $("#rep").innerHTML=h;
+  for(const id of ["wijz","excl","vms"]){const t=$("#t-"+id);if(t)enhance(t,id,true)}
+}
+
+// ---- sorteren en filteren van tabellen ----
+// Klik op een kolomkop = sorteren. Filterregel: tekst = bevat, !tekst = bevat niet, >100 / <=4 / 8 voor getallen.
+const tstate={};
+const num=s=>{s=String(s).trim().replace("−","-");return/^[+-]?[\d.]+(,\d+)?$/.test(s)?Number(s.replace(/\./g,"").replace(",",".")):null};
+const cellText=c=>c.dataset.v??(c.childNodes[0]?.nodeType===3?c.childNodes[0].textContent:c.textContent);
+function cellVal(c){const t=cellText(c).trim();const n=c.dataset.v!=null?Number(c.dataset.v):num(t);return n??t.toLowerCase()}
+function matchFilter(c,expr){
+  expr=expr.trim();if(!expr)return true;
+  const m=expr.match(/^(>=|<=|>|<|=)?\s*([+-]?[\d.,]+)$/);const v=cellVal(c);
+  if(m&&typeof v==="number"){const x=num(m[2]);if(x==null)return true;
+    return{">":v>x,"<":v<x,">=":v>=x,"<=":v<=x}[m[1]]??v===x}
+  const hay=(c.textContent+" "+(c.title||"")).toLowerCase();
+  return expr.startsWith("!")?!hay.includes(expr.slice(1).trim().toLowerCase()):hay.includes(expr.toLowerCase());
+}
+function enhance(table,key,filters){
+  const st=tstate[key]??={col:null,dir:"asc",f:{}};
+  const head=table.rows[0];const ths=[...head.cells];
+  const body=[...table.rows].slice(1).filter(r=>!r.classList.contains("fixed"));
+  const fixed=[...table.rows].slice(1).filter(r=>r.classList.contains("fixed"));
+  if(!body.length)return;
+  let frow=null,count=null;
+  if(filters){
+    frow=document.createElement("tr");frow.className="frow";
+    frow.innerHTML=ths.map((th,i)=>th.textContent.trim()?`<td><input data-i="${i}" placeholder="filter" value="${esc(st.f[i]||"")}"></td>`:"<td></td>").join("");
+    head.after(frow);
+    count=document.createElement("div");count.className="muted tcount";table.closest(".wrap").after(count);
+    frow.querySelectorAll("input").forEach(inp=>inp.oninput=()=>{st.f[inp.dataset.i]=inp.value;apply()});
+  }
+  ths.forEach((th,i)=>{if(!th.textContent.trim())return;th.classList.add("sort");
+    th.onclick=()=>{if(st.col===i)st.dir=st.dir==="asc"?"desc":"asc";else{st.col=i;st.dir=typeof cellVal(body[0].cells[i]??th)==="number"?"desc":"asc"}apply()}});
+  function apply(){
+    ths.forEach((th,i)=>{if(i===st.col)th.dataset.dir=st.dir;else delete th.dataset.dir});
+    let rows=body;
+    if(st.col!=null){const i=st.col,d=st.dir==="asc"?1:-1;
+      rows=[...body].sort((a,b)=>{const x=a.cells[i]?cellVal(a.cells[i]):"",y=b.cells[i]?cellVal(b.cells[i]):"";
+        if(typeof x==="number"&&typeof y==="number")return(x-y)*d;return String(x).localeCompare(String(y),"nl",{numeric:true})*d})}
+    let shown=0;
+    for(const r of rows){const ok=Object.entries(st.f).every(([i,e])=>!r.cells[i]||matchFilter(r.cells[i],e));r.style.display=ok?"":"none";if(ok)shown++;table.tBodies[0].appendChild(r)}
+    for(const r of fixed)table.tBodies[0].appendChild(r);
+    if(count)count.textContent=shown<body.length?`${shown} van ${body.length} getoond`:"";
+  }
+  apply();
 }
 async function quickAdd(){const f=$("#f").value.trim(),os=$("#fos").value.trim();const naam=prompt("Naam van de klant",f.split("/").pop());if(!naam)return;
   customers.push({naam,filter:f,os});await saveCustomers();refresh();}
@@ -291,6 +344,8 @@ $("#file").onchange=e=>upload([...e.target.files]);
 const d=$("#drop");d.ondragover=e=>{e.preventDefault();d.classList.add("over")};d.ondragleave=()=>d.classList.remove("over");
 d.ondrop=e=>{e.preventDefault();d.classList.remove("over");upload([...e.dataTransfer.files])};
 
+const setThemeIcon=()=>$("#theme").textContent=document.documentElement.dataset.theme==="dark"?"☀":"☾";
+$("#theme").onclick=()=>{toggleTheme();setThemeIcon()};setThemeIcon();
 $("#logout").onclick=async()=>{await fetch("/api/logout",{method:"POST"});location.replace("/login")};
 (async()=>{const info=await api("/api/info");if(info.auth)$("#logout").classList.remove("hidden");
   $("#versie").innerHTML=`Facturieren <a href="https://github.com/RichrdJ/facturieren/releases" target="_blank" rel="noopener">${esc(info.versie)}</a>`;
