@@ -55,6 +55,13 @@ th.sort{cursor:pointer;user-select:none}th.sort:hover{color:var(--fg)}
 th.sort[data-dir]::after{content:" ▲";font-size:10px}th.sort[data-dir=desc]::after{content:" ▼"}
 tr.frow td{padding:4px 4px 8px;border-bottom:1px solid var(--line)}tr.frow input{width:100%;min-width:60px;padding:3px 6px;font-size:12px}
 tr.frow:hover td{background:transparent}
+button.lf{white-space:nowrap}button.lf.on{border-color:var(--acc-fg);color:var(--acc-fg)}
+.lpop{position:absolute;z-index:20;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:10px;
+  box-shadow:0 8px 24px rgba(0,0,0,.25);width:min(420px,calc(100vw - 16px))}
+.lpop input[type=search]{width:100%;margin-bottom:8px}
+.lpop label{display:flex;gap:6px;align-items:center;padding:3px 2px;font-size:13px;cursor:pointer}
+.lpop label span{flex:1}.lpop .all{border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:4px}
+.lpop .lvals{max-height:280px;overflow:auto}
 tr.tot th{color:var(--fg);font-size:14px;border-top:2px solid var(--line);border-bottom:0;padding-top:10px}
 .tcount{font-size:12px;margin-top:6px}
 #theme{background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;font-size:16px;line-height:1;padding:5px 9px}td.click{cursor:pointer;color:var(--acc-fg);text-decoration:underline}
@@ -208,7 +215,7 @@ const actCell=(x,canExclude=true)=>`<td class=acts><button class="sec mini" titl
   :canExclude?`<button class="sec mini" onclick="excludeVm('${esc(x.servername)}')">Uitsluiten</button>`:""}</td>`;
 // Kort OS: "Microsoft Windows Server 2019 (64-bit) | Windows Server 2019" -> "Windows Server 2019"; volledige naam als tooltip.
 const osShort=o=>{if(!o)return"";const p=o.split("|").map(t=>t.trim()).filter(Boolean);return(p[p.length-1]||o).replace(/^Microsoft\s+/,"").replace(/\s*\(64-bit\)/,"")};
-const osCell=x=>x.os?`<td class="l os" title="${esc(x.os)}">${esc(osShort(x.os))}</td>`:`<td class="l os muted"><i>(leeg)</i></td>`;
+const osCell=x=>x.os?`<td class="l os" title="${esc(x.os)}" data-f="${esc(x.os)}">${esc(osShort(x.os))}</td>`:`<td class="l os muted" data-f="(Leeg)"><i>(leeg)</i></td>`;
 async function report(){
   const m=$("#maand").value,f=$("#f").value.trim();if(!f)return;
   let r;try{r=await api(`/api/report?maand=${m}&filter=${encodeURIComponent(f)}`)}catch(e){$("#rep").innerHTML=`<div class=card>${esc(e.message)}</div>`;return}
@@ -228,7 +235,7 @@ async function report(){
     if(!v.nieuw.length&&!v.verwijderd.length&&!v.gewijzigd.length&&!vu.length)h+=`<p class=muted>Geen wijzigingen.</p>`;
     const vmrows=(rows,cls,lbl,act)=>rows.map(x=>`<tr><td><span class="pill ${cls}">${lbl}</span> ${esc(x.servername)}</td>`+vmCols(x)+noteCell(x)+osCell(x)+`<td class="l map" title="${esc(x.klant)}"><small class=muted>${esc(x.klant)}</small></td>${actCell(x,act)}</tr>`).join("");
     if(v.nieuw.length||v.verwijderd.length||v.gewijzigd.length||vu.length){
-      h+=`<div class=wrap><table id=t-wijz class=act><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>Notitie</th><th class=l>OS</th><th class=l>Map</th><th></th></tr>";
+      h+=`<div class=wrap><table id=t-wijz class=act><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>Notitie</th><th class=l data-list>OS</th><th class=l>Map</th><th></th></tr>";
       h+=vmrows(v.nieuw,"n","nieuw",true)+vmrows(v.verwijderd,"r","weg",false)+vmrows(vu,"x","⊘ uitgesloten",false);
       h+=v.gewijzigd.map(x=>`<tr><td><span class="pill c">gewijzigd</span> ${esc(x.servername)}</td>`+K.slice(1).map(k=>`<td data-v="${x.nieuw[k]}">${x.delta[k]!=null?`${fmt(x.oud[k])} → <b>${fmt(x.nieuw[k])}</b>`:`<span class=muted>${fmt(x.nieuw[k])}</span>`}</td>`).join("")+noteCell(x)+osCell(x.nieuw)+`<td class="l map" title="${esc(x.klant)}"><small class=muted>${x.verplaatst?`${esc(x.oud.klant)} → `:""}${esc(x.klant)}</small></td>${actCell(x)}</tr>`).join("");
       h+="</table></div>";
@@ -236,7 +243,7 @@ async function report(){
     h+="</div>";
   }
   const ex=r.uitgesloten.length;
-  h+=`<div class=card><h2>VM's (${r.alle.length})${ex?` <small class=muted style="font-weight:400">· ${r.vms.length} op de facturatie, ${ex} uitgesloten</small>`:""}</h2><div class=wrap><table id=t-vms class=act data-sum="1,2,3"><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>Notitie</th><th class=l>OS</th><th class=l>Map</th><th></th></tr>"+
+  h+=`<div class=card><h2>VM's (${r.alle.length})${ex?` <small class=muted style="font-weight:400">· ${r.vms.length} op de facturatie, ${ex} uitgesloten</small>`:""}</h2><div class=wrap><table id=t-vms class=act data-sum="1,2,3"><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>Notitie</th><th class=l data-list>OS</th><th class=l>Map</th><th></th></tr>"+
     r.alle.map(x=>`<tr${x.uitgesloten?" class=excl":""}><td${x.uitgesloten?" class=strike":""}>${esc(x.servername)}</td>`+vmCols(x,x.uitgesloten)+noteCell(x)+osCell(x)+`<td class="l map" title="${esc(x.klant)}"><small class=muted>${esc(x.klant)}</small></td>${actCell(x)}</tr>`).join("")+"</table></div></div>";
   $("#rep").innerHTML=h;
   for(const id of ["wijz","vms"]){const t=$("#t-"+id);if(t)enhance(t,id,true)}
@@ -244,7 +251,7 @@ async function report(){
 
 // ---- sorteren en filteren van tabellen ----
 // Klik op een kolomkop = sorteren. Filterregel: tekst = bevat, !tekst = bevat niet, >100 / <=4 / 8 voor getallen.
-// De OS-kolom krijgt bewust geen filter: alleen tonen.
+// Kolommen met data-list (OS) krijgen een keuzelijst met vinkjes, zoals het filter in Excel.
 const tstate={};
 const num=s=>{s=String(s).trim().replace("−","-");return/^[+-]?[\d.]+(,\d+)?$/.test(s)?Number(s.replace(/\./g,"").replace(",",".")):null};
 const cellText=c=>c.dataset.v??(c.childNodes[0]?.nodeType===3?c.childNodes[0].textContent:c.textContent);
@@ -258,7 +265,7 @@ function matchFilter(c,expr){
   return expr.startsWith("!")?!hay.includes(expr.slice(1).trim().toLowerCase()):hay.includes(expr.toLowerCase());
 }
 function enhance(table,key,filters){
-  const st=tstate[key]??={col:null,dir:"asc",f:{}};
+  const st=tstate[key]??={col:null,dir:"asc",f:{},ex:{}};st.ex??={};
   const head=table.rows[0];const ths=[...head.cells];
   const body=[...table.rows].slice(1).filter(r=>!r.classList.contains("fixed"));
   const fixed=[...table.rows].slice(1).filter(r=>r.classList.contains("fixed"));
@@ -270,10 +277,12 @@ function enhance(table,key,filters){
   let frow=null,count=null;
   if(filters){
     frow=document.createElement("tr");frow.className="frow";
-    frow.innerHTML=ths.map((th,i)=>th.textContent.trim()&&th.textContent.trim()!=="OS"?`<td><input data-i="${i}" placeholder="filter" value="${esc(st.f[i]||"")}"></td>`:"<td></td>").join("");
+    frow.innerHTML=ths.map((th,i)=>th.dataset.list!=null?`<td><button type=button class="sec mini lf" data-i="${i}"></button></td>`
+      :th.textContent.trim()?`<td><input data-i="${i}" placeholder="filter" value="${esc(st.f[i]||"")}"></td>`:"<td></td>").join("");
     head.after(frow);
     count=document.createElement("div");count.className="muted tcount";table.closest(".wrap").after(count);
     frow.querySelectorAll("input").forEach(inp=>inp.oninput=()=>{st.f[inp.dataset.i]=inp.value;apply()});
+    frow.querySelectorAll("button.lf").forEach(btn=>btn.onclick=e=>{e.stopPropagation();listFilter(btn,body,st,Number(btn.dataset.i),apply)});
   }
   ths.forEach((th,i)=>{if(!th.textContent.trim())return;th.classList.add("sort");
     th.onclick=()=>{if(st.col===i)st.dir=st.dir==="asc"?"desc":"asc";else{st.col=i;st.dir=typeof cellVal(body[0].cells[i]??th)==="number"?"desc":"asc"}apply()}});
@@ -284,8 +293,12 @@ function enhance(table,key,filters){
       rows=[...body].sort((a,b)=>{const x=a.cells[i]?cellVal(a.cells[i]):"",y=b.cells[i]?cellVal(b.cells[i]):"";
         if(typeof x==="number"&&typeof y==="number")return(x-y)*d;return String(x).localeCompare(String(y),"nl",{numeric:true})*d})}
     let shown=0;
-    for(const r of rows){const ok=Object.entries(st.f).every(([i,e])=>!r.cells[i]||matchFilter(r.cells[i],e));r.style.display=ok?"":"none";if(ok)shown++;table.tBodies[0].appendChild(r)}
+    for(const r of rows){const ok=Object.entries(st.f).every(([i,e])=>!r.cells[i]||matchFilter(r.cells[i],e))
+        &&Object.entries(st.ex).every(([i,ex])=>!ex.length||!r.cells[i]||!ex.includes(listVal(r.cells[i])));r.style.display=ok?"":"none";if(ok)shown++;table.tBodies[0].appendChild(r)}
     for(const r of fixed)table.tBodies[0].appendChild(r);
+    if(frow)frow.querySelectorAll("button.lf").forEach(b=>{const ex=st.ex[b.dataset.i]||[];
+      const all=new Set(body.map(r=>listVal(r.cells[b.dataset.i])));const n=[...all].filter(v=>!ex.includes(v)).length;
+      b.textContent=ex.length?`${n} van ${all.size} ▾`:"Alle ▾";b.classList.toggle("on",!!ex.length)});
     if(count)count.textContent=shown<body.length?`${shown} van ${body.length} getoond`:"";
     if(trow){
       const billed=rows.filter(r=>r.style.display!=="none"&&!r.classList.contains("excl"));
@@ -295,6 +308,34 @@ function enhance(table,key,filters){
     }
   }
   apply();
+}
+const listVal=c=>c?.dataset.f??c?.textContent.trim()??"";
+// Keuzelijst-filter (zoals Excel): zoeken, alles (de)selecteren, vinkje per waarde met aantal.
+function listFilter(btn,body,st,i,apply){
+  document.querySelector(".lpop")?.remove();
+  const counts=new Map();for(const r of body){const v=listVal(r.cells[i]);counts.set(v,(counts.get(v)||0)+1)}
+  const vals=[...counts.keys()].sort((a,b)=>a==="(Leeg)"?1:b==="(Leeg)"?-1:a.localeCompare(b,"nl",{numeric:true}));
+  const ex=new Set(st.ex[i]||[]);
+  const pop=document.createElement("div");pop.className="lpop";
+  pop.innerHTML=`<input type=search placeholder="Zoeken"><label class=all><input type=checkbox> (Alles selecteren)</label><div class=lvals>${
+    vals.map((v,k)=>`<label data-v="${esc(v.toLowerCase())}"><input type=checkbox data-k="${k}"${ex.has(v)?"":" checked"}> <span>${esc(v)}</span> <small class=muted>${counts.get(v)}</small></label>`).join("")}</div>
+    <div class=row style="justify-content:flex-end;margin-top:8px"><button type=button class="sec mini" data-a=close>Sluiten</button></div>`;
+  document.body.appendChild(pop);
+  const r=btn.getBoundingClientRect();pop.style.top=(r.bottom+scrollY+4)+"px";
+  pop.style.left=Math.max(8,Math.min(r.left+scrollX,scrollX+innerWidth-pop.offsetWidth-8))+"px";
+  const boxes=[...pop.querySelectorAll(".lvals input")],allBox=pop.querySelector(".all input"),search=pop.querySelector("input[type=search]");
+  const visible=()=>boxes.filter(b=>b.closest("label").style.display!=="none");
+  const sync=()=>{const v=visible();allBox.checked=v.every(b=>b.checked);allBox.indeterminate=!allBox.checked&&v.some(b=>b.checked)};
+  const commit=()=>{st.ex[i]=boxes.filter(b=>!b.checked).map(b=>vals[b.dataset.k]);sync();apply()};
+  boxes.forEach(b=>b.onchange=commit);
+  allBox.onchange=()=>{visible().forEach(b=>b.checked=allBox.checked);commit()};
+  search.oninput=()=>{const q=search.value.trim().toLowerCase();boxes.forEach(b=>{const l=b.closest("label");l.style.display=!q||l.dataset.v.includes(q)?"":"none"});sync()};
+  const close=()=>{pop.remove();document.removeEventListener("mousedown",outside);document.removeEventListener("keydown",esc_)};
+  const outside=e=>{if(!pop.contains(e.target)&&e.target!==btn)close()};
+  const esc_=e=>{if(e.key==="Escape")close()};
+  pop.querySelector("[data-a=close]").onclick=close;
+  document.addEventListener("mousedown",outside);document.addEventListener("keydown",esc_);
+  sync();search.focus();
 }
 async function quickAdd(){const f=$("#f").value.trim();const naam=prompt("Naam van de klant",f.split("/").pop());if(!naam)return;
   customers.push({naam,filter:f,os:""});await saveCustomers();refresh();}
