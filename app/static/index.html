@@ -33,49 +33,64 @@ a{color:var(--acc-fg)}
 .drop.over{border-color:var(--acc-fg);color:var(--acc-fg)}
 .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;background:var(--p)}
 .pill.n{background:var(--p-n)}.pill.r{background:var(--p-r)}.pill.c{background:var(--p-c)}
-.hidden{display:none}td.click{cursor:pointer;color:var(--acc-fg);text-decoration:underline}
+.hidden{display:none}
+dialog{border:1px solid var(--line);border-radius:10px;padding:0;background:var(--card);color:var(--fg);width:min(440px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog form{padding:16px;display:grid;gap:10px}
+dialog label{display:grid;gap:4px;font-weight:600}
+dialog label span{font-weight:400;color:var(--muted);font-size:12px}
+.pill.x{background:var(--line)}
+button.mini{padding:2px 8px;font-size:12px}
+tr.excl td{opacity:.75}td.click{cursor:pointer;color:var(--acc-fg);text-decoration:underline}
 </style>
 </head>
 <body>
 <header>
   <h1>Facturieren</h1>
   <div class="tabs row">
-    <button data-tab="overzicht" class="on">Overzicht</button>
-    <button data-tab="klant">Klant</button>
-    <button data-tab="klanten">Klanten beheren</button>
+    <button data-tab="klant" class="on">Klant</button>
+    <button data-tab="overzicht">Overzicht</button>
+    <button data-tab="uitsluitingen">Uitsluitingen</button>
     <button data-tab="upload">Exports</button>
   </div>
   <label>Maand <select id="maand"></select></label>
   <button class="sec hidden" id="logout" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5)">Uitloggen</button>
 </header>
 <main>
+<datalist id="folders"></datalist>
+<datalist id="oslist"></datalist>
 
-<section id="tab-overzicht">
-  <div class="card">
-    <div class="row" style="justify-content:space-between"><h2 id="ov-title">Overzicht</h2><button id="dl">Download Excel</button></div>
-    <div class="wrap"><table id="ov"></table></div>
-    <p class="muted">Klik op een klant voor de details en de verschillen met de vorige maand.</p>
-  </div>
-</section>
-
-<section id="tab-klant" class="hidden">
+<section id="tab-klant">
   <div class="card">
     <div class="row">
-      <input id="f" list="folders" placeholder="Map in kolom C, bijv. Stadsbeheer" size="40">
-      <datalist id="folders"></datalist>
+      <input id="f" list="folders" placeholder="Map in kolom C, bijv. Stadsbeheer" size="36">
+      <input id="fos" list="oslist" placeholder="OS-filter (optioneel), bijv. Windows" size="28">
       <button id="go">Toon</button>
     </div>
+    <div class="row" id="chips" style="margin-top:10px"></div>
+    <p class="muted" style="margin:10px 0 0;font-size:12px">De map moet een hele mapnaam zijn, zodat <code>GGZ</code> niet ook <code>GGZ GV</code> meetelt.
+      OS-filter: <code>Windows</code> = alleen Windows, <code>!Windows</code> = alles behalve Windows, <code>(leeg)</code> = geen OS ingevuld.</p>
   </div>
   <div id="rep"></div>
 </section>
 
-<section id="tab-klanten" class="hidden">
+<section id="tab-overzicht" class="hidden">
   <div class="card">
-    <h2>Klanten</h2>
-    <p class="muted">Het filter is een map uit kolom C (klant), bijv. <code>Stadsbeheer</code> of <code>Paralax/Rostarcas</code>.
-      Het filter moet een hele mapnaam zijn, zodat <code>GGZ</code> niet ook <code>GGZ GV</code> meetelt.</p>
-    <table id="cust"></table>
-    <div class="row" style="margin-top:12px"><button class="sec" id="addc">+ Klant</button><button id="savec">Opslaan</button><span id="savemsg" class="muted"></span></div>
+    <div class="row" style="justify-content:space-between"><h2 id="ov-title">Overzicht</h2>
+      <div class="row"><input id="ovos" list="oslist" placeholder="OS-filter (kolom B), bijv. Windows" size="28"><button class="sec" id="ovos-x" title="OS-filter wissen">×</button><button id="dl">Download Excel</button></div></div>
+    <div class="wrap"><table id="ov"></table></div>
+    <p class="muted">Klik op een klant voor de details. Uitgesloten VM's tellen niet mee in de totalen. Een klant voeg je toe met "Bewaar als klant" op het tabblad Klant.</p>
+  </div>
+</section>
+
+
+<section id="tab-uitsluitingen" class="hidden">
+  <div class="card">
+    <h2>Uitsluitingen</h2>
+    <p class="muted">Uitgesloten VM's komen niet op de facturatie, vanaf de maand bij "vanaf". Vul je "t/m" in, dan telt de VM daarna vanzelf weer mee.
+      Uitsluiten doe je het makkelijkst bij een klant: klik op <b>Uitsluiten</b> naast een VM.</p>
+    <div class="wrap"><table id="excl"></table></div>
+    <div class="row" style="margin-top:12px"><button class="sec" id="adde">+ VM</button><button id="savee">Opslaan</button><span id="saveemsg" class="muted"></span></div>
   </div>
 </section>
 
@@ -97,19 +112,33 @@ a{color:var(--acc-fg)}
 
   <footer class="muted" style="text-align:center;font-size:12px;padding:8px" id="versie"></footer>
 </main>
+
+<dialog id="dlg">
+  <form method="dialog" id="dlgform">
+    <h2 style="margin:0">VM uitsluiten</h2>
+    <div><b id="dserver"></b><br><small class="muted" id="dklant"></small></div>
+    <label>Opmerking <input id="dopm" required placeholder="bijv. uitgerold 02-10, factureren vanaf november"></label>
+    <label>Vanaf maand <input type="month" id="dvanaf" required><span>De eerste maand waarin de VM niet wordt gefactureerd.</span></label>
+    <label>T/m maand (optioneel) <input type="month" id="dtot"><span>Daarna telt de VM vanzelf weer mee. Leeg = tot je hem weer meeneemt.</span></label>
+    <div class="row" style="justify-content:flex-end"><button type="button" class="sec" id="dcancel">Annuleren</button><button type="submit">Uitsluiten</button></div>
+  </form>
+</dialog>
 <script>
 const K=["vms","cpu","memory","tier1_single","tier1_dual","tier3_dual","mgm","storage"];
 const L={vms:"VM's",cpu:"CPU's",memory:"Memory GB",tier1_single:"tier1-single",tier1_dual:"tier1-dual",tier3_dual:"tier3-dual",mgm:"mgm",storage:"Storage GB"};
 const $=s=>document.querySelector(s);
-const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt=n=>Number(n).toLocaleString("nl-NL",{maximumFractionDigits:2});
 const delta=(a,b)=>{if(b==null)return"";const d=a-b;if(!d)return'<span class="muted">0</span>';return`<span class="${d>0?"up":"down"}">${d>0?"+":""}${fmt(d)}</span>`};
+const json=(method,body)=>({method,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
 async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.replace("/login");throw new Error("Niet ingelogd")}if(!r.ok){let m=r.statusText;try{m=(await r.json()).detail}catch{}throw new Error(m)}return r.json()}
-let customers=[];
+const prevMonth=m=>{let[y,mm]=m.split("-").map(Number);mm--;if(!mm){mm=12;y--}return`${y}-${String(mm).padStart(2,"0")}`};
+let customers=[],exclusions=[],lastReport=null;
 
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>show(b.dataset.tab));
 function show(t){document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("on",b.dataset.tab===t));
-  document.querySelectorAll("main>section").forEach(s=>s.classList.toggle("hidden",s.id!=="tab-"+t));}
+  document.querySelectorAll("main>section").forEach(s=>s.classList.toggle("hidden",s.id!=="tab-"+t));
+  if(t==="uitsluitingen")renderExclusions();}
 
 async function loadMonths(keep){
   const ms=await api("/api/months");const sel=$("#maand");const cur=keep&&sel.value;
@@ -124,63 +153,120 @@ async function delMonth(m){if(confirm(`Export ${m} verwijderen?`)){await api("/a
 $("#maand").onchange=refresh;
 
 async function refresh(){
-  const m=$("#maand").value;if(!m)return;
-  const [ov,folders]=await Promise.all([api("/api/overview?maand="+m),api("/api/folders?maand="+m)]);
+  const m=$("#maand").value;if(!m)return;const os=$("#ovos").value.trim();
+  const [ov,folders,oss]=await Promise.all([api(`/api/overview?maand=${m}&os=${encodeURIComponent(os)}`),api("/api/folders?maand="+m),api("/api/os?maand="+m)]);
   $("#folders").innerHTML=folders.map(f=>`<option value="${esc(f.map)}">${f.vms} VM's</option>`).join("");
-  $("#ov-title").textContent=`Overzicht ${m}`+(ov.vorige_maand?` (verschil t.o.v. ${ov.vorige_maand})`:"");
+  $("#oslist").innerHTML=oss.map(o=>`<option value="${esc(o.os)}">${o.vms} VM's</option>`).join("");
+  $("#ov-title").textContent=`Overzicht ${m}`+(ov.vorige_maand?` (verschil t.o.v. ${ov.vorige_maand})`:"")+(os?` · OS: ${os}`:"")+(ov.vorige_zonder_os?" (geen vergelijking: vorige maand heeft geen OS-gegevens)":"");
   let h="<tr><th>Klant</th>"+K.map(k=>`<th>${L[k]}</th>`).join("")+"<th>Mutaties</th></tr>";
-  if(!ov.klanten.length)h+=`<tr><td colspan=10 class="muted l">Nog geen klanten. Voeg ze toe onder "Klanten beheren".</td></tr>`;
-  for(const k of ov.klanten){
-    h+=`<tr><td class="click" data-f="${esc(k.filter)}">${esc(k.naam)}</td>`+K.map(x=>`<td>${fmt(k.totaal[x])}<br><small>${delta(k.totaal[x],k.vorig_totaal?.[x])}</small></td>`).join("");
-    const mu=k.mutaties;h+=`<td>${mu?`<span class="pill n">+${mu.nieuw}</span> <span class="pill r">−${mu.verwijderd}</span> <span class="pill c">~${mu.gewijzigd}</span>`:""}</td></tr>`;
-  }
+  if(!ov.klanten.length)h+=`<tr><td colspan=10 class="muted l">Nog geen klanten. Zoek een klant op het tabblad Klant en klik op "Bewaar als klant".</td></tr>`;
+  ov.klanten.forEach((k,i)=>{
+    h+=`<tr><td class="click" data-i="${i}">${esc(k.naam)}${k.os?` <small class=muted>(${esc(k.os)})</small>`:""}</td>`+K.map(x=>`<td>${fmt(k.totaal[x])}<br><small>${delta(k.totaal[x],k.vorig_totaal?.[x])}</small></td>`).join("");
+    const mu=k.mutaties;h+=`<td>${mu?`<span class="pill n">+${mu.nieuw}</span> <span class="pill r">−${mu.verwijderd}</span> <span class="pill c">~${mu.gewijzigd}</span>`:""}${k.uitgesloten?` <span class="pill x" title="uitgesloten VM's">⊘ ${k.uitgesloten}</span>`:""} <button class="sec mini" title="Klant uit overzicht halen" onclick="removeCustomer(${i})">×</button></td></tr>`;
+  });
   h+=`<tr><td class="muted">Niet toegewezen</td>`+K.map(x=>`<td class="muted">${fmt(ov.niet_toegewezen[x])}</td>`).join("")+"<td></td></tr>";
+  if(ov.uitgesloten.vms)h+=`<tr><td class="muted">Uitgesloten</td>`+K.map(x=>`<td class="muted">${fmt(ov.uitgesloten[x])}</td>`).join("")+"<td></td></tr>";
   h+=`<tr><th>Totaal export</th>`+K.map(x=>`<th>${fmt(ov.alles[x])}</th>`).join("")+"<th></th></tr>";
   $("#ov").innerHTML=h;
-  $("#ov").querySelectorAll("td.click").forEach(td=>td.onclick=()=>{$("#f").value=td.dataset.f;show("klant");report()});
+  $("#ov").querySelectorAll("td.click").forEach(td=>td.onclick=()=>{const k=ov.klanten[td.dataset.i];
+    $("#f").value=k.filter;$("#fos").value=[k.os,os].filter(Boolean).join(",");show("klant");report()});
   if($("#f").value)report();
 }
-$("#dl").onclick=()=>location.href="/api/export?maand="+$("#maand").value;
+let osTimer;$("#ovos").oninput=()=>{clearTimeout(osTimer);osTimer=setTimeout(refresh,300)};
+$("#ovos-x").onclick=()=>{$("#ovos").value="";refresh()};
+$("#dl").onclick=()=>location.href=`/api/export?maand=${$("#maand").value}&os=${encodeURIComponent($("#ovos").value.trim())}`;
 
-$("#go").onclick=report;$("#f").onkeydown=e=>{if(e.key==="Enter")report()};
+$("#go").onclick=report;$("#f").onkeydown=$("#fos").onkeydown=e=>{if(e.key==="Enter")report()};
+const vmCols=x=>K.slice(1).map(k=>`<td>${fmt(x[k])}</td>`).join("");
 async function report(){
-  const m=$("#maand").value,f=$("#f").value.trim();if(!f)return;
-  let r;try{r=await api(`/api/report?maand=${m}&filter=${encodeURIComponent(f)}`)}catch(e){$("#rep").innerHTML=`<div class=card>${esc(e.message)}</div>`;return}
-  let h=`<div class=card><h2>${esc(f)} – ${m}</h2><div class=wrap><table><tr><th></th>`+K.map(k=>`<th>${L[k]}</th>`).join("")+"</tr>";
+  const m=$("#maand").value,f=$("#f").value.trim(),os=$("#fos").value.trim();if(!f)return;
+  let r;try{r=await api(`/api/report?maand=${m}&filter=${encodeURIComponent(f)}&os=${encodeURIComponent(os)}`)}catch(e){$("#rep").innerHTML=`<div class=card>${esc(e.message)}</div>`;return}
+  lastReport=r;
+  let h=`<div class=card><h2>${esc(f)}${os?` · OS: ${esc(os)}`:""} – ${m}</h2><div class=wrap><table><tr><th></th>`+K.map(k=>`<th>${L[k]}</th>`).join("")+"</tr>";
   h+=`<tr><td><b>${m}</b></td>`+K.map(k=>`<td><b>${fmt(r.totaal[k])}</b></td>`).join("")+"</tr>";
   if(r.vorig_totaal){h+=`<tr><td class=muted>${r.vorige_maand}</td>`+K.map(k=>`<td class=muted>${fmt(r.vorig_totaal[k])}</td>`).join("")+"</tr>";
     h+=`<tr><td>Verschil</td>`+K.map(k=>`<td>${delta(r.totaal[k],r.vorig_totaal[k])}</td>`).join("")+"</tr>";}
   h+="</table></div>";
-  if(!customers.some(c=>c.filter.toLowerCase()===f.toLowerCase()))h+=`<p><button class="sec" onclick="quickAdd()">Bewaar als klant</button></p>`;
+  if(r.vorige_zonder_os)h+=`<p class=muted>Geen vergelijking met ${r.vorige_maand}: die export heeft geen OS-gegevens in kolom B.</p>`;
+  if(r.uitgesloten.length)h+=`<p class=muted>${r.uitgesloten.length} VM('s) uitgesloten, zie hieronder. Die tellen niet mee.</p>`;
+  if(!customers.some(c=>c.filter.toLowerCase()===f.toLowerCase()&&(c.os||"").toLowerCase()===os.toLowerCase()))h+=`<p><button class="sec" onclick="quickAdd()">Bewaar als klant</button></p>`;
   h+="</div>";
   const v=r.verschil;
   if(v){
     h+=`<div class=card><h2>Wijzigingen t.o.v. ${r.vorige_maand}</h2>`;
     if(!v.nieuw.length&&!v.verwijderd.length&&!v.gewijzigd.length)h+=`<p class=muted>Geen wijzigingen.</p>`;
-    const vmrows=(rows,cls,lbl)=>rows.map(x=>`<tr><td><span class="pill ${cls}">${lbl}</span> ${esc(x.servername)}</td>`+K.slice(1).map(k=>`<td>${fmt(x[k])}</td>`).join("")+`<td class=l><small class=muted>${esc(x.klant)}</small></td></tr>`).join("");
+    const vmrows=(rows,cls,lbl,act)=>rows.map(x=>`<tr><td><span class="pill ${cls}">${lbl}</span> ${esc(x.servername)}</td>`+vmCols(x)+`<td class=l><small class=muted>${esc(x.klant)}</small></td><td>${act?`<button class="sec mini" onclick="excludeVm('${esc(x.servername)}')">Uitsluiten</button>`:""}</td></tr>`).join("");
     if(v.nieuw.length||v.verwijderd.length||v.gewijzigd.length){
-      h+=`<div class=wrap><table><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>Map</th></tr>";
-      h+=vmrows(v.nieuw,"n","nieuw")+vmrows(v.verwijderd,"r","weg");
-      h+=v.gewijzigd.map(x=>`<tr><td><span class="pill c">gewijzigd</span> ${esc(x.servername)}</td>`+K.slice(1).map(k=>`<td>${x.delta[k]!=null?`${fmt(x.oud[k])} → <b>${fmt(x.nieuw[k])}</b>`:`<span class=muted>${fmt(x.nieuw[k])}</span>`}</td>`).join("")+`<td class=l><small class=muted>${x.verplaatst?`${esc(x.oud.klant)} → `:""}${esc(x.klant)}</small></td></tr>`).join("");
+      h+=`<div class=wrap><table><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>Map</th><th></th></tr>";
+      h+=vmrows(v.nieuw,"n","nieuw",true)+vmrows(v.verwijderd,"r","weg",false);
+      h+=v.gewijzigd.map(x=>`<tr><td><span class="pill c">gewijzigd</span> ${esc(x.servername)}</td>`+K.slice(1).map(k=>`<td>${x.delta[k]!=null?`${fmt(x.oud[k])} → <b>${fmt(x.nieuw[k])}</b>`:`<span class=muted>${fmt(x.nieuw[k])}</span>`}</td>`).join("")+`<td class=l><small class=muted>${x.verplaatst?`${esc(x.oud.klant)} → `:""}${esc(x.klant)}</small></td><td><button class="sec mini" onclick="excludeVm('${esc(x.servername)}')">Uitsluiten</button></td></tr>`).join("");
       h+="</table></div>";
     }
     h+="</div>";
   }
-  h+=`<div class=card><h2>VM's (${r.vms.length})</h2><div class=wrap><table><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>Map</th></tr>"+
-    r.vms.map(x=>`<tr><td>${esc(x.servername)}</td>`+K.slice(1).map(k=>`<td>${fmt(x[k])}</td>`).join("")+`<td class=l><small class=muted>${esc(x.klant)}</small></td></tr>`).join("")+"</table></div></div>";
+  if(r.uitgesloten.length){
+    h+=`<div class=card><h2>Uitgesloten (${r.uitgesloten.length})</h2><div class=wrap><table><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>Opmerking</th><th></th></tr>"+
+      r.uitgesloten.map(x=>`<tr class=excl><td><span class="pill x">⊘</span> ${esc(x.servername)}</td>`+vmCols(x)+`<td class=l>${esc(x.opmerking)}${x.tot?` <small class=muted>(t/m ${esc(x.tot)})</small>`:""}</td><td><button class="sec mini" onclick="includeVm('${esc(x.servername)}')">Weer meenemen</button></td></tr>`).join("")+"</table></div></div>";
+  }
+  h+=`<div class=card><h2>VM's op de facturatie (${r.vms.length})</h2><div class=wrap><table><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>OS</th><th class=l>Map</th><th></th></tr>"+
+    r.vms.map(x=>`<tr><td>${esc(x.servername)}</td>`+vmCols(x)+`<td class=l><small class=muted>${esc(x.os)}</small></td><td class=l><small class=muted>${esc(x.klant)}</small></td><td><button class="sec mini" onclick="excludeVm('${esc(x.servername)}')">Uitsluiten</button></td></tr>`).join("")+"</table></div></div>";
   $("#rep").innerHTML=h;
 }
-async function quickAdd(){const f=$("#f").value.trim();const naam=prompt("Naam van de klant",f.split("/").pop());if(!naam)return;
-  customers.push({naam,filter:f});await saveCustomers();refresh();}
+async function quickAdd(){const f=$("#f").value.trim(),os=$("#fos").value.trim();const naam=prompt("Naam van de klant",f.split("/").pop());if(!naam)return;
+  customers.push({naam,filter:f,os});await saveCustomers();refresh();}
 
-function renderCustomers(){
-  $("#cust").innerHTML="<tr><th>Naam</th><th class=l>Filter (map)</th><th></th></tr>"+customers.map((c,i)=>
-    `<tr><td><input value="${esc(c.naam)}" oninput="customers[${i}].naam=this.value"></td><td class=l><input list="folders" size="40" value="${esc(c.filter)}" oninput="customers[${i}].filter=this.value"></td><td><button class="sec" onclick="customers.splice(${i},1);renderCustomers()">×</button></td></tr>`).join("");
+// ---- uitsluiten ----
+let pending=null;
+function excludeVm(name){
+  const vm=[...lastReport.vms,...(lastReport.verschil?.nieuw||[])].find(x=>x.servername===name);
+  pending={servername:name,klant:vm?.klant||""};
+  $("#dserver").textContent=name;$("#dklant").textContent=pending.klant;
+  $("#dopm").value="";$("#dvanaf").value=$("#maand").value;$("#dtot").value="";
+  $("#dlg").showModal();$("#dopm").focus();
 }
-$("#addc").onclick=()=>{customers.push({naam:"",filter:""});renderCustomers()};
-async function saveCustomers(){customers=await api("/api/customers",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(customers)});renderCustomers();}
-$("#savec").onclick=async()=>{await saveCustomers();$("#savemsg").textContent="Opgeslagen";setTimeout(()=>$("#savemsg").textContent="",2000);refresh()};
+$("#dcancel").onclick=()=>$("#dlg").close();
+$("#dlgform").onsubmit=async e=>{
+  e.preventDefault();
+  const tot=$("#dtot").value,vanaf=$("#dvanaf").value;
+  if(tot&&tot<vanaf){alert("T/m maand ligt vóór de vanaf-maand.");return}
+  exclusions=exclusions.filter(x=>x.servername.toLowerCase()!==pending.servername.toLowerCase()||(x.tot&&x.tot<vanaf));
+  exclusions.push({...pending,opmerking:$("#dopm").value.trim(),vanaf,tot});
+  await saveExclusions();$("#dlg").close();refresh();
+};
+async function includeVm(name){
+  const m=$("#maand").value,key=name.toLowerCase();
+  // Uitsluiting die al eerder liep: laten eindigen vóór deze maand, zodat eerdere maanden kloppen.
+  exclusions=exclusions.flatMap(x=>{
+    if(x.servername.toLowerCase()!==key||x.vanaf>m||(x.tot&&x.tot<m))return[x];
+    return x.vanaf<m?[{...x,tot:prevMonth(m)}]:[];
+  });
+  await saveExclusions();refresh();
+}
+async function saveExclusions(){exclusions=await api("/api/exclusions",json("PUT",exclusions));}
+function renderExclusions(){
+  const m=$("#maand").value;
+  $("#excl").innerHTML="<tr><th class=l>Server</th><th class=l>Opmerking</th><th class=l>Vanaf</th><th class=l>T/m</th><th class=l>Status "+esc(m)+"</th><th></th></tr>"+
+    (exclusions.length?"":`<tr><td colspan=6 class="muted l">Nog geen uitsluitingen.</td></tr>`)+
+    exclusions.map((x,i)=>{const act=x.vanaf<=m&&(!x.tot||m<=x.tot);
+      return`<tr><td class=l><input value="${esc(x.servername)}" size="18" oninput="exclusions[${i}].servername=this.value"><br><small class=muted>${esc(x.klant)}</small></td>
+      <td class=l><input value="${esc(x.opmerking)}" size="36" oninput="exclusions[${i}].opmerking=this.value"></td>
+      <td class=l><input type="month" value="${esc(x.vanaf)}" oninput="exclusions[${i}].vanaf=this.value"></td>
+      <td class=l><input type="month" value="${esc(x.tot)}" oninput="exclusions[${i}].tot=this.value"></td>
+      <td class=l>${act?'<span class="pill x">⊘ uitgesloten</span>':'<span class="pill n">telt mee</span>'}</td>
+      <td><button class="sec" onclick="exclusions.splice(${i},1);renderExclusions()">×</button></td></tr>`}).join("");
+}
+$("#adde").onclick=()=>{exclusions.push({servername:"",opmerking:"",vanaf:$("#maand").value,tot:"",klant:""});renderExclusions()};
+$("#savee").onclick=async()=>{try{await saveExclusions();renderExclusions();$("#saveemsg").textContent="Opgeslagen";setTimeout(()=>$("#saveemsg").textContent="",2000);refresh()}catch(e){$("#saveemsg").textContent=e.message}};
 
+// ---- klanten (bewaard vanuit het tabblad Klant) ----
+function renderChips(){
+  $("#chips").innerHTML=customers.length?'<span class="muted">Bewaard:</span> '+customers.map((c,i)=>`<button class="sec mini" onclick="openCustomer(${i})">${esc(c.naam)}${c.os?` · ${esc(c.os)}`:""}</button>`).join(" "):"";
+}
+function openCustomer(i){$("#f").value=customers[i].filter;$("#fos").value=customers[i].os||"";report()}
+async function removeCustomer(i){if(!confirm(`"${customers[i].naam}" uit het overzicht halen?`))return;customers.splice(i,1);await saveCustomers();refresh()}
+async function saveCustomers(){customers=await api("/api/customers",json("PUT",customers));renderChips();}
+
+// ---- exports ----
 async function upload(files){
   for(const file of files){
     const fd=new FormData();fd.append("file",file);fd.append("maand",files.length===1?$("#um").value:"");
@@ -203,7 +289,8 @@ d.ondrop=e=>{e.preventDefault();d.classList.remove("over");upload([...e.dataTran
 
 $("#logout").onclick=async()=>{await fetch("/api/logout",{method:"POST"});location.replace("/login")};
 (async()=>{const info=await api("/api/info");if(info.auth)$("#logout").classList.remove("hidden");
-  $("#versie").innerHTML=`Facturieren <a href="https://github.com/RichrdJ/facturieren/releases" target="_blank" rel="noopener">${esc(info.versie)}</a>`;customers=await api("/api/customers");renderCustomers();await loadMonths(false)})();
+  $("#versie").innerHTML=`Facturieren <a href="https://github.com/RichrdJ/facturieren/releases" target="_blank" rel="noopener">${esc(info.versie)}</a>`;
+  [customers,exclusions]=await Promise.all([api("/api/customers"),api("/api/exclusions")]);renderChips();await loadMonths(false)})();
 </script>
 </body>
 </html>

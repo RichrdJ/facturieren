@@ -5,16 +5,19 @@ Kleine webapp voor de maandelijkse facturatie op basis van de "VMs export 01-MM-
 - **Upload** de maandexport via de webpagina (slepen of kiezen), als kale `.csv`
   (bijv. `Server_Chargeback_V3-2026-10-01.csv`) of als `.xlsx`. De maand komt uit de bestandsnaam.
   Exports worden in de container bewaard (`/data`); de app kijkt zelf nergens naar een map.
-- **Klanten** leg je één keer vast met een filter op kolom C (`klant`), bijv. `Stadsbeheer` of
-  `Paralax/Rostarcas`. Het filter matcht op hele mapnamen, dus `GGZ` telt `GGZ GV` niet mee.
-- **Overzicht** per klant: aantal VM's, CPU's, memory, tier1-single/dual, tier3-dual, mgm en totale storage,
-  met het verschil t.o.v. de vorige geüploade maand. Teksten als `225.00` worden automatisch getallen
-  (geen zoek-en-vervang meer nodig).
+- **Klant** (startpagina): kies een map uit kolom C (`klant`), bijv. `Stadsbeheer` of `Paralax/Rostarcas`, en zie
+  de totalen: aantal VM's, CPU's, memory, tier1-single/dual, tier3-dual, mgm en totale storage, met het verschil
+  t.o.v. de vorige geüploade maand. Teksten als `225.00` worden automatisch getallen (geen zoek-en-vervang meer nodig).
+  Het filter matcht op hele mapnamen, dus `GGZ` telt `GGZ GV` niet mee. Met **Bewaar als klant** komt hij in het overzicht.
+- **OS-filter** op kolom B: `Windows` = alleen Windows, `!Windows` = alles behalve Windows, `(leeg)` = geen OS.
+  Exports van vóór oktober 2026 hebben geen OS-gegevens; met een OS-filter wordt daar niet mee vergeleken.
 - **Wijzigingen** per klant: nieuwe VM's, verwijderde VM's en VM's met andere CPU/memory/storage.
+- **Uitsluiten**: zet een VM (tijdelijk) niet op de facturatie, met een opmerking, bijv. "uitgerold 02-10, factureren
+  vanaf november". Geldt vanaf de gekozen maand, optioneel t/m een maand; daarna telt hij vanzelf weer mee.
+- **Overzicht** van alle bewaarde klanten, met "Niet toegewezen" (VM's die onder geen klant vallen) en "Uitgesloten".
 - **Download xlsx** per maand: de export als nette xlsx (getallen als getal, opgemaakte kop, filter,
   vastgezette eerste rij), als `VMs export 01-MM-JJJJ.xlsx`. Een CSV kan ook los worden omgezet zonder op te slaan.
 - **Download Excel** met het overzicht en per klant een tabblad met de VM's.
-- "Niet toegewezen" toont wat in de export staat maar onder geen enkele klant valt.
 
 ## Starten
 
@@ -43,7 +46,7 @@ service op de node blijft waar het volume staat.
 docker compose up -d --build
 ```
 
-Open daarna http://localhost:9898. Data staat in `./data` (exports + `klanten.json`).
+Open daarna http://localhost:9898. Data staat in `./data` (exports, `klanten.json`, `uitsluitingen.json`).
 
 ## Inloggen
 

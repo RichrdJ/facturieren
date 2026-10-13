@@ -24,6 +24,7 @@ from . import excel
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 EXPORTS_DIR = DATA_DIR / "exports"
 CUSTOMERS_FILE = DATA_DIR / "klanten.json"
+EXCLUSIONS_FILE = DATA_DIR / "uitsluitingen.json"
 STATIC_DIR = Path(__file__).parent / "static"
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "").lower() in ("1", "true", "yes")
@@ -195,6 +196,21 @@ def get_customers() -> list[dict]:
     return []
 
 
+def get_exclusions() -> list[dict]:
+    if EXCLUSIONS_FILE.exists():
+        return json.loads(EXCLUSIONS_FILE.read_text())
+    return []
+
+
+def active_exclusions(month: str) -> dict[str, dict]:
+    """Uitsluitingen die in deze maand gelden, per servernaam (hoofdletterongevoelig)."""
+    return {
+        e["servername"].lower(): e
+        for e in get_exclusions()
+        if e.get("vanaf", "") <= month and (not e.get("tot") or month <= e["tot"])
+    }
+
+
 def month_from_filename(name: str) -> str | None:
     """'VMs export 01-10-2026.xlsx' -> '2026-10'."""
     m = re.search(r"(\d{1,2})[-_.](\d{1,2})[-_.](\d{4})", name)
@@ -214,8 +230,53 @@ def totals(rows: list[dict]) -> dict:
     return t
 
 
-def select(export: excel.Export, pattern: str) -> list[dict]:
-    return [r for r in export.rows if excel.matches(r["klant"], pattern)]
+def os_matches(os_name: str, pattern: str) -> bool:
+    """OS-filter op kolom B: 'Windows' = bevat Windows, '!Windows' = bevat geen Windows,
+    '(leeg)' = geen OS ingevuld. Meerdere termen met komma's moeten allemaal kloppen."""
+    value = (os_name or "").lower()
+    for term in (t.strip().lower() for t in (pattern or "").split(",")):
+        if not term:
+            continue
+        negate = term.startswith("!")
+        term = term.lstrip("!").strip()
+        hit = value == "" if term == "(leeg)" else term in value
+        if hit == negate:
+            return False
+    return True
+
+
+def select(export: excel.Export, pattern: str, os_filter: str = "") -> list[dict]:
+    return [r for r in export.rows if excel.matches(r["klant"], pattern) and os_matches(r["os"], os_filter)]
+
+
+def split_excluded(rows: list[dict], month: str) -> tuple[list[dict], list[dict]]:
+    """Splits in (te factureren, uitgesloten). Uitgesloten rijen krijgen de opmerking erbij."""
+    excl = active_exclusions(month)
+    billed, excluded = [], []
+    for r in rows:
+        e = excl.get(r["servername"].lower())
+        if e:
+            excluded.append({**r, "opmerking": e.get("opmerking", ""), "tot": e.get("tot", "")})
+        else:
+            billed.append(r)
+    return billed, excluded
+
+
+def billable(month: str, pattern: str, os_filter: str = "") -> tuple[list[dict], list[dict]]:
+    return split_excluded(select(load(month), pattern, os_filter), month)
+
+
+def has_os(month: str) -> bool:
+    """Oudere exports (vóór de V3-export) hebben een lege OS-kolom."""
+    return any(r["os"] for r in load(month).rows)
+
+
+def compare_month(month: str, os_filter: str) -> tuple[str | None, bool]:
+    """(vorige maand, of vergelijken zinvol is). Met een OS-filter alleen als die maand OS-gegevens heeft."""
+    prev = previous(month)
+    if prev and os_filter.strip() and not has_os(prev):
+        return prev, False
+    return prev, bool(prev)
 
 
 def diff(cur: list[dict], prev: list[dict]) -> dict:
@@ -241,41 +302,53 @@ def diff(cur: list[dict], prev: list[dict]) -> dict:
     return {"nieuw": added, "verwijderd": removed, "gewijzigd": changed}
 
 
-def report(month: str, pattern: str) -> dict:
-    export = load(month)
-    rows = select(export, pattern)
-    prev_month = previous(month)
-    result = {"maand": month, "filter": pattern, "totaal": totals(rows), "vms": rows, "vorige_maand": prev_month}
-    if prev_month:
-        prev_rows = select(load(prev_month), pattern)
+def report(month: str, pattern: str, os_filter: str = "") -> dict:
+    rows, excluded = billable(month, pattern, os_filter)
+    prev_month, comparable = compare_month(month, os_filter)
+    result = {
+        "maand": month, "filter": pattern, "os": os_filter, "totaal": totals(rows), "vms": rows,
+        "uitgesloten": excluded, "vorige_maand": prev_month, "vorige_zonder_os": bool(prev_month) and not comparable,
+    }
+    if comparable:
+        prev_rows, _ = billable(prev_month, pattern, os_filter)
         result["vorig_totaal"] = totals(prev_rows)
         result["verschil"] = diff(rows, prev_rows)
     return result
 
 
-def overview(month: str) -> dict:
+def _combine_os(*filters: str) -> str:
+    return ",".join(f for f in filters if f and f.strip())
+
+
+def overview(month: str, os_filter: str = "") -> dict:
     export = load(month)
-    prev_month = previous(month)
-    prev_export = load(prev_month) if prev_month else None
+    prev_month, comparable = compare_month(month, os_filter)
     regels = []
     covered = set()
     for c in get_customers():
-        rows = select(export, c["filter"])
-        covered.update(id(r) for r in rows)
-        regel = {"naam": c["naam"], "filter": c["filter"], "totaal": totals(rows)}
-        if prev_export:
-            prev_rows = select(prev_export, c["filter"])
+        os_c = _combine_os(c.get("os", ""), os_filter)
+        matched = select(export, c["filter"], os_c)
+        covered.update(id(r) for r in matched)
+        rows, excluded = split_excluded(matched, month)
+        regel = {"naam": c["naam"], "filter": c["filter"], "os": c.get("os", ""), "totaal": totals(rows), "uitgesloten": len(excluded)}
+        if comparable and (not c.get("os") or has_os(prev_month)):
+            prev_rows, _ = billable(prev_month, c["filter"], os_c)
             regel["vorig_totaal"] = totals(prev_rows)
             d = diff(rows, prev_rows)
             regel["mutaties"] = {k: len(v) for k, v in d.items()}
         regels.append(regel)
-    unassigned = [r for r in export.rows if id(r) not in covered]
+    in_scope = [r for r in export.rows if os_matches(r["os"], os_filter)]
+    unassigned = [r for r in in_scope if id(r) not in covered]
+    _, excluded_all = split_excluded(in_scope, month)
     return {
         "maand": month,
-        "vorige_maand": prev_month,
+        "vorige_maand": prev_month if comparable else None,
+        "vorige_zonder_os": bool(prev_month) and not comparable,
+        "os": os_filter,
         "klanten": regels,
         "niet_toegewezen": totals(unassigned),
-        "alles": totals(export.rows),
+        "uitgesloten": totals(excluded_all),
+        "alles": totals(in_scope),
     }
 
 
@@ -374,6 +447,7 @@ def api_folders(maand: str):
 class Customer(BaseModel):
     naam: str
     filter: str
+    os: str = ""
 
 
 @app.get("/api/customers")
@@ -389,20 +463,55 @@ def api_save_customers(customers: list[Customer]):
     return data
 
 
+@app.get("/api/os")
+def api_os(maand: str):
+    """Alle OS-waarden uit kolom B met aantal VM's, voor suggesties."""
+    count = Counter(r["os"] or "(leeg)" for r in load(maand).rows)
+    return [{"os": k, "vms": v} for k, v in sorted(count.items())]
+
+
+class Exclusion(BaseModel):
+    servername: str
+    opmerking: str = ""
+    vanaf: str = ""
+    tot: str = ""
+    klant: str = ""
+
+
+@app.get("/api/exclusions")
+def api_exclusions():
+    return get_exclusions()
+
+
+@app.put("/api/exclusions")
+def api_save_exclusions(exclusions: list[Exclusion]):
+    data = []
+    for e in exclusions:
+        if not e.servername.strip():
+            continue
+        for m in (e.vanaf, e.tot):
+            if m and not MONTH_RE.match(m):
+                raise HTTPException(400, f"Ongeldige maand '{m}' bij {e.servername}; gebruik JJJJ-MM.")
+        data.append({k: v.strip() for k, v in e.model_dump().items()})
+    with _lock:
+        EXCLUSIONS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    return data
+
+
 @app.get("/api/report")
-def api_report(maand: str, filter: str):
-    return report(maand, filter)
+def api_report(maand: str, filter: str, os: str = ""):
+    return report(maand, filter, os)
 
 
 @app.get("/api/overview")
-def api_overview(maand: str):
-    return overview(maand)
+def api_overview(maand: str, os: str = ""):
+    return overview(maand, os)
 
 
 @app.get("/api/export")
-def api_export(maand: str):
+def api_export(maand: str, os: str = ""):
     """Excel met overzicht per klant + per klant een tabblad met de VM's."""
-    ov = overview(maand)
+    ov = overview(maand, os)
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Overzicht"
@@ -417,6 +526,10 @@ def api_export(maand: str):
             row += [k["totaal"][x] - k["vorig_totaal"][x] for x in keys]
         ws.append(row)
     ws.append(["Niet toegewezen", "", *[ov["niet_toegewezen"][x] for x in keys]])
+    ws.append(["Uitgesloten (niet gefactureerd)", "", *[ov["uitgesloten"][x] for x in keys]])
+    if os:
+        ws.append([])
+        ws.append([f"OS-filter: {os}"])
     used = set()
     for k in ov["klanten"]:
         title = re.sub(r"[\[\]:*?/\\]", "_", k["naam"])[:31]
@@ -424,16 +537,23 @@ def api_export(maand: str):
             title = title[:28] + str(len(used))
         used.add(title)
         s = wb.create_sheet(title)
-        s.append(["servername", "klant", "cluster", *LABELS.values()])
-        for r in select(load(maand), k["filter"]):
-            s.append([r["servername"], r["klant"], r["cluster"], *[r[x] for x in excel.NUMERIC]])
+        s.append(["servername", "OS", "klant", "cluster", *LABELS.values()])
+        rows, _ = billable(maand, k["filter"], _combine_os(k["os"], os))
+        for r in rows:
+            s.append([r["servername"], r["os"], r["klant"], r["cluster"], *[r[x] for x in excel.NUMERIC]])
+    _, excluded = split_excluded([r for r in load(maand).rows if os_matches(r["os"], os)], maand)
+    if excluded:
+        s = wb.create_sheet("Uitgesloten")
+        s.append(["servername", "klant", "opmerking", "t/m maand", *LABELS.values()])
+        for r in excluded:
+            s.append([r["servername"], r["klant"], r["opmerking"], r["tot"], *[r[x] for x in excel.NUMERIC]])
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="facturatie {maand}.xlsx"'},
+        headers={"Content-Disposition": f'attachment; filename="facturatie {maand}{" (OS-filter)" if os else ""}.xlsx"'},
     )
 
 
