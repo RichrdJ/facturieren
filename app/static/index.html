@@ -14,7 +14,7 @@
 header{background:var(--head);color:#fff;padding:12px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 header h1{font-size:18px;margin:0;margin-right:auto}
 header select,header button{font:inherit}
-main{max-width:1200px;margin:0 auto;padding:16px}
+main{max-width:1800px;margin:0 auto;padding:16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px}
 h2{font-size:16px;margin:0 0 12px}
 table{border-collapse:collapse;width:100%}th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
@@ -44,6 +44,10 @@ dialog label span{font-weight:400;color:var(--muted);font-size:12px}
 button.mini{padding:2px 8px;font-size:12px}
 tr.excl td{opacity:.75}
 td.os{max-width:220px;overflow:hidden;text-overflow:ellipsis}
+td.map{max-width:340px;overflow:hidden;text-overflow:ellipsis}
+/* Actieknop (Uitsluiten) altijd in beeld, ook als de tabel horizontaal scrolt */
+table.act tr>*:last-child{position:sticky;right:0;background:var(--card);box-shadow:-8px 0 8px -8px rgba(0,0,0,.25)}
+table.act tr:hover>td:last-child{background:var(--hover)}
 th.sort{cursor:pointer;user-select:none}th.sort:hover{color:var(--fg)}
 th.sort[data-dir]::after{content:" ▲";font-size:10px}th.sort[data-dir=desc]::after{content:" ▼"}
 tr.frow td{padding:4px 4px 8px;border-bottom:1px solid var(--line)}tr.frow input{width:100%;min-width:60px;padding:3px 6px;font-size:12px}
@@ -200,21 +204,21 @@ async function report(){
   if(v){
     h+=`<div class=card><h2>Wijzigingen t.o.v. ${r.vorige_maand}</h2>`;
     if(!v.nieuw.length&&!v.verwijderd.length&&!v.gewijzigd.length)h+=`<p class=muted>Geen wijzigingen.</p>`;
-    const vmrows=(rows,cls,lbl,act)=>rows.map(x=>`<tr><td><span class="pill ${cls}">${lbl}</span> ${esc(x.servername)}</td>`+vmCols(x)+osCell(x)+`<td class=l><small class=muted>${esc(x.klant)}</small></td><td>${act?`<button class="sec mini" onclick="excludeVm('${esc(x.servername)}')">Uitsluiten</button>`:""}</td></tr>`).join("");
+    const vmrows=(rows,cls,lbl,act)=>rows.map(x=>`<tr><td><span class="pill ${cls}">${lbl}</span> ${esc(x.servername)}</td>`+vmCols(x)+osCell(x)+`<td class="l map" title="${esc(x.klant)}"><small class=muted>${esc(x.klant)}</small></td><td>${act?`<button class="sec mini" onclick="excludeVm('${esc(x.servername)}')">Uitsluiten</button>`:""}</td></tr>`).join("");
     if(v.nieuw.length||v.verwijderd.length||v.gewijzigd.length){
-      h+=`<div class=wrap><table id=t-wijz><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>OS</th><th class=l>Map</th><th></th></tr>";
+      h+=`<div class=wrap><table id=t-wijz class=act><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>OS</th><th class=l>Map</th><th></th></tr>";
       h+=vmrows(v.nieuw,"n","nieuw",true)+vmrows(v.verwijderd,"r","weg",false);
-      h+=v.gewijzigd.map(x=>`<tr><td><span class="pill c">gewijzigd</span> ${esc(x.servername)}</td>`+K.slice(1).map(k=>`<td data-v="${x.nieuw[k]}">${x.delta[k]!=null?`${fmt(x.oud[k])} → <b>${fmt(x.nieuw[k])}</b>`:`<span class=muted>${fmt(x.nieuw[k])}</span>`}</td>`).join("")+osCell(x.nieuw)+`<td class=l><small class=muted>${x.verplaatst?`${esc(x.oud.klant)} → `:""}${esc(x.klant)}</small></td><td><button class="sec mini" onclick="excludeVm('${esc(x.servername)}')">Uitsluiten</button></td></tr>`).join("");
+      h+=v.gewijzigd.map(x=>`<tr><td><span class="pill c">gewijzigd</span> ${esc(x.servername)}</td>`+K.slice(1).map(k=>`<td data-v="${x.nieuw[k]}">${x.delta[k]!=null?`${fmt(x.oud[k])} → <b>${fmt(x.nieuw[k])}</b>`:`<span class=muted>${fmt(x.nieuw[k])}</span>`}</td>`).join("")+osCell(x.nieuw)+`<td class="l map" title="${esc(x.klant)}"><small class=muted>${x.verplaatst?`${esc(x.oud.klant)} → `:""}${esc(x.klant)}</small></td><td><button class="sec mini" onclick="excludeVm('${esc(x.servername)}')">Uitsluiten</button></td></tr>`).join("");
       h+="</table></div>";
     }
     h+="</div>";
   }
   if(r.uitgesloten.length){
-    h+=`<div class=card><h2>Uitgesloten (${r.uitgesloten.length})</h2><div class=wrap><table id=t-excl><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>OS</th><th class=l>Opmerking</th><th></th></tr>"+
+    h+=`<div class=card><h2>Uitgesloten (${r.uitgesloten.length})</h2><div class=wrap><table id=t-excl class=act><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>OS</th><th class=l>Opmerking</th><th></th></tr>"+
       r.uitgesloten.map(x=>`<tr class=excl><td><span class="pill x">⊘</span> ${esc(x.servername)}</td>`+vmCols(x)+osCell(x)+`<td class=l>${esc(x.opmerking)}${x.tot?` <small class=muted>(t/m ${esc(x.tot)})</small>`:""}</td><td><button class="sec mini" onclick="includeVm('${esc(x.servername)}')">Weer meenemen</button></td></tr>`).join("")+"</table></div></div>";
   }
-  h+=`<div class=card><h2>VM's op de facturatie (${r.vms.length})</h2><div class=wrap><table id=t-vms><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>OS</th><th class=l>Map</th><th></th></tr>"+
-    r.vms.map(x=>`<tr><td>${esc(x.servername)}</td>`+vmCols(x)+osCell(x)+`<td class=l><small class=muted>${esc(x.klant)}</small></td><td><button class="sec mini" onclick="excludeVm('${esc(x.servername)}')">Uitsluiten</button></td></tr>`).join("")+"</table></div></div>";
+  h+=`<div class=card><h2>VM's op de facturatie (${r.vms.length})</h2><div class=wrap><table id=t-vms class=act><tr><th>Server</th>`+K.slice(1).map(k=>`<th>${L[k]}</th>`).join("")+"<th class=l>OS</th><th class=l>Map</th><th></th></tr>"+
+    r.vms.map(x=>`<tr><td>${esc(x.servername)}</td>`+vmCols(x)+osCell(x)+`<td class="l map" title="${esc(x.klant)}"><small class=muted>${esc(x.klant)}</small></td><td><button class="sec mini" onclick="excludeVm('${esc(x.servername)}')">Uitsluiten</button></td></tr>`).join("")+"</table></div></div>";
   $("#rep").innerHTML=h;
   for(const id of ["wijz","excl","vms"]){const t=$("#t-"+id);if(t)enhance(t,id,true)}
 }
