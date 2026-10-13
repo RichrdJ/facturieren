@@ -5,6 +5,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 ENV DATA_DIR=/data
 VOLUME /data
-EXPOSE 8000
-HEALTHCHECK CMD python -c "import urllib.request;urllib.request.urlopen('http://localhost:8000/healthz')"
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 9898
+HEALTHCHECK CMD python -c "import urllib.request;urllib.request.urlopen('http://localhost:9898/healthz')"
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9898"]

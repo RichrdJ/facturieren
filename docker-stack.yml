@@ -1,0 +1,30 @@
+# Deploy op Docker Swarm:
+#   docker stack deploy -c docker-stack.yml facturieren
+version: "3.8"
+
+services:
+  app:
+    image: ghcr.io/richrdj/facturieren:latest
+    ports:
+      - "9898:9898"
+    volumes:
+      - data:/data
+    environment:
+      APP_USER: admin
+      # Leeg = geen wachtwoord. Zet dit als de app vanaf het netwerk bereikbaar is.
+      APP_PASSWORD: ""
+    deploy:
+      # Eén replica: de exports staan in een lokaal volume op de node.
+      replicas: 1
+      update_config:
+        order: stop-first
+      restart_policy:
+        condition: any
+      # Pin de service aan één node zodat het volume (en dus je data) niet verhuist
+      # als je meerdere nodes hebt. Pas de hostname aan of haal dit weg bij één node.
+      # placement:
+      #   constraints:
+      #     - node.hostname == mijn-swarm-node
+
+volumes:
+  data:

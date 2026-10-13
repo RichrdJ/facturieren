@@ -15,18 +15,32 @@ Kleine webapp voor de maandelijkse facturatie op basis van de "VMs export 01-MM-
 
 ## Starten
 
+### Docker Swarm (stack)
+
+Het image wordt bij elke push naar `main` automatisch gebouwd door GitHub Actions en gepubliceerd als
+`ghcr.io/richrdj/facturieren:latest`.
+
+```bash
+docker stack deploy -c docker-stack.yml facturieren
+```
+
+Open daarna http://<swarm-host>:9898. De data staat in het volume `facturieren_data`.
+Updaten naar de nieuwste versie:
+
+```bash
+docker service update --image ghcr.io/richrdj/facturieren:latest --force facturieren_app
+```
+
+Heb je meer dan één node, zet dan de `placement`-constraint in `docker-stack.yml` aan, zodat de
+service op de node blijft waar het volume staat.
+
+### Docker Compose (lokaal)
+
 ```bash
 docker compose up -d --build
 ```
 
-Open daarna http://localhost:8000. Data staat in `./data` (exports + `klanten.json`).
-
-Zonder compose:
-
-```bash
-docker build -t facturieren .
-docker run -d -p 8000:8000 -v facturieren-data:/data --name facturieren facturieren
-```
+Open daarna http://localhost:9898. Data staat in `./data` (exports + `klanten.json`).
 
 ### Wachtwoord
 

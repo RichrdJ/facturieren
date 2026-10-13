@@ -1,9 +1,9 @@
 services:
   facturieren:
     build: .
-    image: facturieren
+    image: ghcr.io/richrdj/facturieren:latest
     ports:
-      - "8000:8000"
+      - "9898:9898"
     volumes:
       - ./data:/data
     environment:
