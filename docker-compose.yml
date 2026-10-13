@@ -1,0 +1,13 @@
+services:
+  facturieren:
+    build: .
+    image: facturieren
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      # Leeg = geen wachtwoord. Zet dit als de app niet alleen lokaal draait.
+      APP_USER: admin
+      APP_PASSWORD: ""
+    restart: unless-stopped
