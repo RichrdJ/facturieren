@@ -75,9 +75,15 @@ input,select{padding:6px 8px;border:1px solid var(--line);border-radius:6px;font
 <section id="tab-upload" class="hidden">
   <div class="card">
     <h2>Export uploaden</h2>
-    <div class="drop" id="drop">Sleep hier de "VMs export 01-MM-JJJJ.xlsx" naartoe of <label style="color:var(--acc);cursor:pointer;text-decoration:underline">kies een bestand<input type="file" id="file" accept=".xlsx" multiple hidden></label></div>
+    <div class="drop" id="drop">Sleep hier de export (.csv of .xlsx) naartoe of <label style="color:var(--acc);cursor:pointer;text-decoration:underline">kies een bestand<input type="file" id="file" accept=".xlsx,.csv" multiple hidden></label></div>
     <div class="row" style="margin-top:8px"><span class="muted">De maand wordt uit de bestandsnaam gehaald. Anders kies je hem hier:</span><input type="month" id="um"></div>
     <p id="umsg"></p>
+  </div>
+  <div class="card">
+    <h2>Alleen omzetten naar xlsx</h2>
+    <p class="muted">Zet een kale CSV om naar een nette xlsx, zonder hem in de app op te slaan.</p>
+    <label class="sec" style="display:inline-block;padding:6px 12px;border:1px solid var(--line);border-radius:6px;cursor:pointer">Kies CSV…<input type="file" id="conv" accept=".csv,.xlsx" hidden></label>
+    <span id="cmsg" class="muted"></span>
   </div>
   <div class="card"><h2>Opgeslagen exports</h2><table id="mlist"></table></div>
 </section>
@@ -102,7 +108,7 @@ async function loadMonths(keep){
   sel.innerHTML=ms.map(m=>`<option>${m.maand}</option>`).reverse().join("");
   if(cur&&ms.some(m=>m.maand===cur))sel.value=cur;
   $("#mlist").innerHTML="<tr><th>Maand</th><th class=l>Werkblad</th><th>VM's</th><th></th></tr>"+ms.slice().reverse().map(m=>
-    `<tr><td>${m.maand}</td><td class=l>${esc(m.werkblad||m.fout)}</td><td>${m.vms??""}</td><td><button class="sec" onclick="delMonth('${m.maand}')">Verwijder</button></td></tr>`).join("");
+    `<tr><td>${m.maand}</td><td class=l>${esc(m.werkblad||m.fout)}</td><td>${m.vms??""}</td><td><a href="/api/months/${m.maand}/xlsx"><button class="sec">Download xlsx</button></a> <button class="sec" onclick="delMonth('${m.maand}')">Verwijder</button></td></tr>`).join("");
   if(!ms.length){show("upload");$("#ov").innerHTML="";return}
   refresh();
 }
@@ -176,6 +182,12 @@ async function upload(files){
   }
   $("#um").value="";await loadMonths(false);
 }
+$("#conv").onchange=async e=>{const file=e.target.files[0];if(!file)return;const fd=new FormData();fd.append("file",file);
+  const r=await fetch("/api/convert",{method:"POST",body:fd});
+  if(!r.ok){$("#cmsg").textContent="Mislukt: "+((await r.json().catch(()=>({}))).detail||r.statusText);return}
+  const name=(r.headers.get("content-disposition")||"").match(/filename="(.+)"/)?.[1]||"export.xlsx";
+  const a=document.createElement("a");a.href=URL.createObjectURL(await r.blob());a.download=name;a.click();
+  $("#cmsg").textContent="✔ "+name;e.target.value="";};
 $("#file").onchange=e=>upload([...e.target.files]);
 const d=$("#drop");d.ondragover=e=>{e.preventDefault();d.classList.add("over")};d.ondragleave=()=>d.classList.remove("over");
 d.ondrop=e=>{e.preventDefault();d.classList.remove("over");upload([...e.dataTransfer.files])};

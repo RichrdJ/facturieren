@@ -206,7 +206,10 @@ async def api_upload(file: UploadFile = File(...), maand: str = Form("")):
         raise HTTPException(400, "Kon de maand niet uit de bestandsnaam halen; kies de maand handmatig.")
     path = _month_path(month)
     try:
-        export = excel.parse(data)
+        export = excel.parse(data, file.filename or "")
+        if not excel.is_xlsx(data):
+            # Kale CSV: bewaar als nette xlsx.
+            data = excel.clean_xlsx(data, file.filename or "")
     except excel.ExportError as err:
         raise HTTPException(400, str(err))
     with _lock:
@@ -224,6 +227,37 @@ def api_delete_month(month: str):
     path.unlink()
     _cache.pop(month, None)
     return {"ok": True}
+
+
+@app.get("/api/months/{month}/xlsx")
+def api_month_xlsx(month: str):
+    """De export van die maand als nette xlsx (getallen als getal, opgemaakte kop, filter)."""
+    path = _month_path(month)
+    if not path.exists():
+        raise HTTPException(404, "Niet gevonden")
+    y, m = month.split("-")
+    return Response(
+        excel.clean_xlsx(path.read_bytes()),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="VMs export 01-{m}-{y}.xlsx"'},
+    )
+
+
+@app.post("/api/convert")
+async def api_convert(file: UploadFile = File(...)):
+    """Losse omzetting csv/xlsx -> nette xlsx, zonder iets op te slaan."""
+    data = await file.read()
+    try:
+        out = excel.clean_xlsx(data, file.filename or "")
+    except excel.ExportError as err:
+        raise HTTPException(400, str(err))
+    month = month_from_filename(file.filename or "")
+    name = f"VMs export 01-{month[5:]}-{month[:4]}.xlsx" if month else re.sub(r"\.[^.]*$", "", file.filename or "export") + ".xlsx"
+    return Response(
+        out,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
 
 
 @app.get("/api/folders")

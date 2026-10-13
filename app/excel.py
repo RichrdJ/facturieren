@@ -1,12 +1,15 @@
 """Inlezen en normaliseren van de maandelijkse 'VMs export' Excel-bestanden."""
 from __future__ import annotations
 
+import csv
 import io
 import re
 import zipfile
 from dataclasses import dataclass, field
 
 import openpyxl
+from openpyxl.styles import Font, PatternFill
+from openpyxl.utils import get_column_letter
 
 # Interne kolomnaam -> regex op de (genormaliseerde) kopregel.
 # De exports wisselen soms van kolomnaam (bijv. 'Total_Memory' vs 'Total Memory GB').
@@ -104,14 +107,84 @@ def _norm(header) -> str:
     return re.sub(r"[\s_]+", " ", str(header or "")).strip().lower().replace("'", "")
 
 
-def parse(data: bytes) -> Export:
-    wb = _open(data)
-    ws = wb[wb.sheetnames[0]]
-    it = ws.iter_rows(values_only=True)
-    try:
-        header = next(it)
-    except StopIteration:
-        raise ExportError("Werkblad is leeg")
+def _read_csv(data: bytes) -> list[list]:
+    for enc in ("utf-8-sig", "cp1252"):
+        try:
+            text = data.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    first = text.split("\n", 1)[0]
+    delimiter = ";" if first.count(";") > first.count(",") else ","
+    return [row for row in csv.reader(io.StringIO(text), delimiter=delimiter)]
+
+
+def is_xlsx(data: bytes) -> bool:
+    return data[:2] == b"PK"
+
+
+def read_table(data: bytes, name: str = "") -> tuple[str, list, list[list]]:
+    """Geeft (werkbladnaam, kopregel, rijen) voor zowel .xlsx als .csv."""
+    if is_xlsx(data):
+        wb = _open(data)
+        ws = wb[wb.sheetnames[0]]
+        rows = [list(r) for r in ws.iter_rows(values_only=True)]
+        title = ws.title
+        wb.close()
+    else:
+        rows = _read_csv(data)
+        title = re.sub(r"\.[^.]*$", "", name)[:31] or "Export"
+    if not rows:
+        raise ExportError("Bestand is leeg")
+    return title, rows[0], rows[1:]
+
+
+def _looks_numeric(v) -> bool:
+    return isinstance(v, str) and re.fullmatch(r"-?\d+([.,]\d+)?", v.strip() or "x") is not None
+
+
+def clean_xlsx(data: bytes, name: str = "") -> bytes:
+    """Kale export (csv of xlsx) -> nette xlsx: getallen als getal, opgemaakte kop, filter."""
+    title, header, rows = read_table(data, name)
+    while header and (header[-1] is None or str(header[-1]).strip() == ""):
+        header = header[:-1]
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = re.sub(r"[\[\]:*?/\\]", "_", title)[:31]
+    ws.append([str(h or "").strip() for h in header])
+    for raw in rows:
+        if not any(v not in (None, "") for v in raw):
+            continue
+        out = []
+        for i in range(len(header)):
+            v = raw[i] if i < len(raw) else None
+            if isinstance(v, str):
+                v = v.strip()
+                if v == "":
+                    v = None
+                elif _looks_numeric(v):
+                    n = to_number(v)
+                    v = int(n) if n.is_integer() else n
+            out.append(v)
+        ws.append(out)
+    bold = Font(bold=True, color="FFFFFF")
+    fill = PatternFill("solid", fgColor="C2185B")
+    for cell in ws[1]:
+        cell.font = bold
+        cell.fill = fill
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
+    for i, col in enumerate(ws.iter_cols(min_row=1, max_row=min(ws.max_row, 500), values_only=True), start=1):
+        width = max((len(str(v)) for v in col if v is not None), default=8)
+        ws.column_dimensions[get_column_letter(i)].width = min(max(width + 2, 8), 60)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def parse(data: bytes, name: str = "") -> Export:
+    title, header, rows = read_table(data, name)
+    it = iter(rows)
 
     index: dict[str, int] = {}
     for key, pattern in COLUMNS.items():
@@ -123,7 +196,7 @@ def parse(data: bytes) -> Export:
     if missing:
         raise ExportError(f"Kolom(men) niet gevonden: {', '.join(missing)}. Kopregel: {header}")
 
-    export = Export(sheet=ws.title)
+    export = Export(sheet=title)
     for k in NUMERIC:
         if k not in index:
             export.warnings.append(f"Kolom '{k}' niet gevonden, telt als 0")
@@ -145,7 +218,6 @@ def parse(data: bytes) -> Export:
         for k in NUMERIC:
             row[k] = to_number(get(k))
         export.rows.append(row)
-    wb.close()
     return export
 
 
