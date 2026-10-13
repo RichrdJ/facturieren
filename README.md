@@ -6,16 +6,15 @@ Kleine webapp voor de maandelijkse facturatie op basis van de "VMs export 01-MM-
   (bijv. `Server_Chargeback_V3-2026-10-01.csv`) of als `.xlsx`. De maand komt uit de bestandsnaam.
   Exports worden in de container bewaard (`/data`); de app kijkt zelf nergens naar een map.
 - **Klant** (startpagina): kies een map uit kolom C (`klant`), bijv. `Stadsbeheer` of `Paralax/Rostarcas`, en zie
-  de totalen: aantal VM's, CPU's, memory, tier1-single/dual, tier3-dual, mgm en totale storage, met het verschil
+  de totalen: aantal VM's, CPU's, memory en totale storage (Total_Storage, incl. alle tiers), met het verschil
   t.o.v. de vorige geüploade maand. Teksten als `225.00` worden automatisch getallen (geen zoek-en-vervang meer nodig).
   Het filter matcht op hele mapnamen, dus `GGZ` telt `GGZ GV` niet mee. Met **Bewaar als klant** komt hij in het overzicht.
-- **OS-filter** op kolom B: `Windows` = alleen Windows, `!Windows` = alles behalve Windows, `(leeg)` = geen OS.
-  Exports van vóór oktober 2026 hebben geen OS-gegevens; met een OS-filter wordt daar niet mee vergeleken.
+- **OS** (kolom B) staat bij elke VM. Exports van vóór oktober 2026 hebben geen OS-gegevens.
 - **Wijzigingen** per klant: nieuwe VM's, verwijderde VM's en VM's met andere CPU/memory/storage.
 - **Uitsluiten**: zet een VM (tijdelijk) niet op de facturatie, met een opmerking, bijv. "uitgerold 02-10, factureren
   vanaf november". Geldt vanaf de gekozen maand, optioneel t/m een maand; daarna telt hij vanzelf weer mee.
 - **Overzicht** van alle bewaarde klanten, met "Niet toegewezen" (VM's die onder geen klant vallen) en "Uitgesloten".
-- **Sorteren en filteren**: klik op een kolomkop om te sorteren; filter per kolom op tekst (`webapps`, `!(leeg)`)
+- **Sorteren en filteren**: klik op een kolomkop om te sorteren; filter per kolom op tekst (`webapps`, `!acc`)
   of getal (`>=6`, `<100`, `8`).
 - **Licht/donker** wissel je met ☀/☾ rechtsboven.
 - **Download xlsx** per maand: de export als nette xlsx (getallen als getal, opgemaakte kop, filter,

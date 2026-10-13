@@ -67,18 +67,15 @@ tr.frow:hover td{background:transparent}
 </header>
 <main>
 <datalist id="folders"></datalist>
-<datalist id="oslist"></datalist>
 
 <section id="tab-klant">
   <div class="card">
     <div class="row">
       <input id="f" list="folders" placeholder="Map in kolom C, bijv. Stadsbeheer" size="36">
-      <input id="fos" list="oslist" placeholder="OS-filter (optioneel), bijv. Windows" size="28">
       <button id="go">Toon</button>
     </div>
     <div class="row" id="chips" style="margin-top:10px"></div>
-    <p class="muted" style="margin:10px 0 0;font-size:12px">De map moet een hele mapnaam zijn, zodat <code>GGZ</code> niet ook <code>GGZ GV</code> meetelt.
-      OS-filter: <code>Windows</code> = alleen Windows, <code>!Windows</code> = alles behalve Windows, <code>(leeg)</code> = geen OS ingevuld.</p>
+    <p class="muted" style="margin:10px 0 0;font-size:12px">De map moet een hele mapnaam zijn, zodat <code>GGZ</code> niet ook <code>GGZ GV</code> meetelt.</p>
   </div>
   <div id="rep"></div>
 </section>
@@ -86,7 +83,7 @@ tr.frow:hover td{background:transparent}
 <section id="tab-overzicht" class="hidden">
   <div class="card">
     <div class="row" style="justify-content:space-between"><h2 id="ov-title">Overzicht</h2>
-      <div class="row"><input id="ovos" list="oslist" placeholder="OS-filter (kolom B), bijv. Windows" size="28"><button class="sec" id="ovos-x" title="OS-filter wissen">×</button><button id="dl">Download Excel</button></div></div>
+      <button id="dl">Download Excel</button></div>
     <div class="wrap"><table id="ov"></table></div>
     <p class="muted">Klik op een klant voor de details. Uitgesloten VM's tellen niet mee in de totalen. Een klant voeg je toe met "Bewaar als klant" op het tabblad Klant.</p>
   </div>
@@ -133,8 +130,8 @@ tr.frow:hover td{background:transparent}
   </form>
 </dialog>
 <script>
-const K=["vms","cpu","memory","tier1_single","tier1_dual","tier3_dual","mgm","storage"];
-const L={vms:"VM's",cpu:"CPU's",memory:"Memory GB",tier1_single:"tier1-single",tier1_dual:"tier1-dual",tier3_dual:"tier3-dual",mgm:"mgm",storage:"Storage GB"};
+const K=["vms","cpu","memory","storage"];
+const L={vms:"VM's",cpu:"CPU's",memory:"Memory GB",storage:"Storage GB"};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt=n=>Number(n).toLocaleString("nl-NL",{maximumFractionDigits:2});
@@ -162,15 +159,14 @@ async function delMonth(m){if(confirm(`Export ${m} verwijderen?`)){await api("/a
 $("#maand").onchange=refresh;
 
 async function refresh(){
-  const m=$("#maand").value;if(!m)return;const os=$("#ovos").value.trim();
-  const [ov,folders,oss]=await Promise.all([api(`/api/overview?maand=${m}&os=${encodeURIComponent(os)}`),api("/api/folders?maand="+m),api("/api/os?maand="+m)]);
+  const m=$("#maand").value;if(!m)return;
+  const [ov,folders]=await Promise.all([api("/api/overview?maand="+m),api("/api/folders?maand="+m)]);
   $("#folders").innerHTML=folders.map(f=>`<option value="${esc(f.map)}">${f.vms} VM's</option>`).join("");
-  $("#oslist").innerHTML=oss.map(o=>`<option value="${esc(o.os)}">${o.vms} VM's</option>`).join("");
-  $("#ov-title").textContent=`Overzicht ${m}`+(ov.vorige_maand?` (verschil t.o.v. ${ov.vorige_maand})`:"")+(os?` · OS: ${os}`:"")+(ov.vorige_zonder_os?" (geen vergelijking: vorige maand heeft geen OS-gegevens)":"");
+  $("#ov-title").textContent=`Overzicht ${m}`+(ov.vorige_maand?` (verschil t.o.v. ${ov.vorige_maand})`:"");
   let h="<tr><th>Klant</th>"+K.map(k=>`<th>${L[k]}</th>`).join("")+"<th>Mutaties</th></tr>";
   if(!ov.klanten.length)h+=`<tr><td colspan=10 class="muted l">Nog geen klanten. Zoek een klant op het tabblad Klant en klik op "Bewaar als klant".</td></tr>`;
   ov.klanten.forEach((k,i)=>{
-    h+=`<tr><td class="click" data-i="${i}">${esc(k.naam)}${k.os?` <small class=muted>(${esc(k.os)})</small>`:""}</td>`+K.map(x=>`<td>${fmt(k.totaal[x])}<br><small>${delta(k.totaal[x],k.vorig_totaal?.[x])}</small></td>`).join("");
+    h+=`<tr><td class="click" data-i="${i}">${esc(k.naam)}</td>`+K.map(x=>`<td>${fmt(k.totaal[x])}<br><small>${delta(k.totaal[x],k.vorig_totaal?.[x])}</small></td>`).join("");
     const mu=k.mutaties;h+=`<td>${mu?`<span class="pill n">+${mu.nieuw}</span> <span class="pill r">−${mu.verwijderd}</span> <span class="pill c">~${mu.gewijzigd}</span>`:""}${k.uitgesloten?` <span class="pill x" title="uitgesloten VM's">⊘ ${k.uitgesloten}</span>`:""} <button class="sec mini" title="Klant uit overzicht halen" onclick="removeCustomer(${i})">×</button></td></tr>`;
   });
   h+=`<tr class=fixed><td class="muted">Niet toegewezen</td>`+K.map(x=>`<td class="muted">${fmt(ov.niet_toegewezen[x])}</td>`).join("")+"<td></td></tr>";
@@ -178,30 +174,27 @@ async function refresh(){
   h+=`<tr class=fixed><th>Totaal export</th>`+K.map(x=>`<th>${fmt(ov.alles[x])}</th>`).join("")+"<th></th></tr>";
   $("#ov").innerHTML=h;enhance($("#ov"),"ov",false);
   $("#ov").querySelectorAll("td.click").forEach(td=>td.onclick=()=>{const k=ov.klanten[td.dataset.i];
-    $("#f").value=k.filter;$("#fos").value=[k.os,os].filter(Boolean).join(",");show("klant");report()});
+    $("#f").value=k.filter;show("klant");report()});
   if($("#f").value)report();
 }
-let osTimer;$("#ovos").oninput=()=>{clearTimeout(osTimer);osTimer=setTimeout(refresh,300)};
-$("#ovos-x").onclick=()=>{$("#ovos").value="";refresh()};
-$("#dl").onclick=()=>location.href=`/api/export?maand=${$("#maand").value}&os=${encodeURIComponent($("#ovos").value.trim())}`;
+$("#dl").onclick=()=>location.href="/api/export?maand="+$("#maand").value;
 
-$("#go").onclick=report;$("#f").onkeydown=$("#fos").onkeydown=e=>{if(e.key==="Enter")report()};
+$("#go").onclick=report;$("#f").onkeydown=e=>{if(e.key==="Enter")report()};
 const vmCols=x=>K.slice(1).map(k=>`<td>${fmt(x[k])}</td>`).join("");
 // Kort OS: "Microsoft Windows Server 2019 (64-bit) | Windows Server 2019" -> "Windows Server 2019"; volledige naam als tooltip.
 const osShort=o=>{if(!o)return"";const p=o.split("|").map(t=>t.trim()).filter(Boolean);return(p[p.length-1]||o).replace(/^Microsoft\s+/,"").replace(/\s*\(64-bit\)/,"")};
 const osCell=x=>x.os?`<td class="l os" title="${esc(x.os)}">${esc(osShort(x.os))}</td>`:`<td class="l os muted"><i>(leeg)</i></td>`;
 async function report(){
-  const m=$("#maand").value,f=$("#f").value.trim(),os=$("#fos").value.trim();if(!f)return;
-  let r;try{r=await api(`/api/report?maand=${m}&filter=${encodeURIComponent(f)}&os=${encodeURIComponent(os)}`)}catch(e){$("#rep").innerHTML=`<div class=card>${esc(e.message)}</div>`;return}
+  const m=$("#maand").value,f=$("#f").value.trim();if(!f)return;
+  let r;try{r=await api(`/api/report?maand=${m}&filter=${encodeURIComponent(f)}`)}catch(e){$("#rep").innerHTML=`<div class=card>${esc(e.message)}</div>`;return}
   lastReport=r;
-  let h=`<div class=card><h2>${esc(f)}${os?` · OS: ${esc(os)}`:""} – ${m}</h2><div class=wrap><table><tr><th></th>`+K.map(k=>`<th>${L[k]}</th>`).join("")+"</tr>";
+  let h=`<div class=card><h2>${esc(f)} – ${m}</h2><div class=wrap><table><tr><th></th>`+K.map(k=>`<th>${L[k]}</th>`).join("")+"</tr>";
   h+=`<tr><td><b>${m}</b></td>`+K.map(k=>`<td><b>${fmt(r.totaal[k])}</b></td>`).join("")+"</tr>";
   if(r.vorig_totaal){h+=`<tr><td class=muted>${r.vorige_maand}</td>`+K.map(k=>`<td class=muted>${fmt(r.vorig_totaal[k])}</td>`).join("")+"</tr>";
     h+=`<tr><td>Verschil</td>`+K.map(k=>`<td>${delta(r.totaal[k],r.vorig_totaal[k])}</td>`).join("")+"</tr>";}
   h+="</table></div>";
-  if(r.vorige_zonder_os)h+=`<p class=muted>Geen vergelijking met ${r.vorige_maand}: die export heeft geen OS-gegevens in kolom B.</p>`;
   if(r.uitgesloten.length)h+=`<p class=muted>${r.uitgesloten.length} VM('s) uitgesloten, zie hieronder. Die tellen niet mee.</p>`;
-  if(!customers.some(c=>c.filter.toLowerCase()===f.toLowerCase()&&(c.os||"").toLowerCase()===os.toLowerCase()))h+=`<p><button class="sec" onclick="quickAdd()">Bewaar als klant</button></p>`;
+  if(!customers.some(c=>c.filter.toLowerCase()===f.toLowerCase()))h+=`<p><button class="sec" onclick="quickAdd()">Bewaar als klant</button></p>`;
   h+="</div>";
   const v=r.verschil;
   if(v){
@@ -228,6 +221,7 @@ async function report(){
 
 // ---- sorteren en filteren van tabellen ----
 // Klik op een kolomkop = sorteren. Filterregel: tekst = bevat, !tekst = bevat niet, >100 / <=4 / 8 voor getallen.
+// De OS-kolom krijgt bewust geen filter: alleen tonen.
 const tstate={};
 const num=s=>{s=String(s).trim().replace("−","-");return/^[+-]?[\d.]+(,\d+)?$/.test(s)?Number(s.replace(/\./g,"").replace(",",".")):null};
 const cellText=c=>c.dataset.v??(c.childNodes[0]?.nodeType===3?c.childNodes[0].textContent:c.textContent);
@@ -249,7 +243,7 @@ function enhance(table,key,filters){
   let frow=null,count=null;
   if(filters){
     frow=document.createElement("tr");frow.className="frow";
-    frow.innerHTML=ths.map((th,i)=>th.textContent.trim()?`<td><input data-i="${i}" placeholder="filter" value="${esc(st.f[i]||"")}"></td>`:"<td></td>").join("");
+    frow.innerHTML=ths.map((th,i)=>th.textContent.trim()&&th.textContent.trim()!=="OS"?`<td><input data-i="${i}" placeholder="filter" value="${esc(st.f[i]||"")}"></td>`:"<td></td>").join("");
     head.after(frow);
     count=document.createElement("div");count.className="muted tcount";table.closest(".wrap").after(count);
     frow.querySelectorAll("input").forEach(inp=>inp.oninput=()=>{st.f[inp.dataset.i]=inp.value;apply()});
@@ -269,8 +263,8 @@ function enhance(table,key,filters){
   }
   apply();
 }
-async function quickAdd(){const f=$("#f").value.trim(),os=$("#fos").value.trim();const naam=prompt("Naam van de klant",f.split("/").pop());if(!naam)return;
-  customers.push({naam,filter:f,os});await saveCustomers();refresh();}
+async function quickAdd(){const f=$("#f").value.trim();const naam=prompt("Naam van de klant",f.split("/").pop());if(!naam)return;
+  customers.push({naam,filter:f,os:""});await saveCustomers();refresh();}
 
 // ---- uitsluiten ----
 let pending=null;
@@ -317,9 +311,9 @@ $("#savee").onclick=async()=>{try{await saveExclusions();renderExclusions();$("#
 
 // ---- klanten (bewaard vanuit het tabblad Klant) ----
 function renderChips(){
-  $("#chips").innerHTML=customers.length?'<span class="muted">Bewaard:</span> '+customers.map((c,i)=>`<button class="sec mini" onclick="openCustomer(${i})">${esc(c.naam)}${c.os?` · ${esc(c.os)}`:""}</button>`).join(" "):"";
+  $("#chips").innerHTML=customers.length?'<span class="muted">Bewaard:</span> '+customers.map((c,i)=>`<button class="sec mini" onclick="openCustomer(${i})">${esc(c.naam)}</button>`).join(" "):"";
 }
-function openCustomer(i){$("#f").value=customers[i].filter;$("#fos").value=customers[i].os||"";report()}
+function openCustomer(i){$("#f").value=customers[i].filter;report()}
 async function removeCustomer(i){if(!confirm(`"${customers[i].naam}" uit het overzicht halen?`))return;customers.splice(i,1);await saveCustomers();refresh()}
 async function saveCustomers(){customers=await api("/api/customers",json("PUT",customers));renderChips();}
 

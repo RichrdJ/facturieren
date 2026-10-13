@@ -33,14 +33,12 @@ APP_VERSION = os.environ.get("APP_VERSION", "dev")
 SESSION_DAYS = 30
 
 MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
+# Wat er gefactureerd (en getoond) wordt. De tier-kolommen tellen alleen mee via Total storage.
+BILLED = ["cpu", "memory", "storage"]
 LABELS = {
     "cpu": "CPU's",
     "memory": "Memory GB",
-    "tier1_single": "tier1-single GB",
-    "tier1_dual": "tier1-dual GB",
-    "tier3_dual": "tier3-dual GB",
-    "mgm": "mgm GB",
-    "storage": "Total storage GB",
+    "storage": "Storage GB",
 }
 
 EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -295,7 +293,7 @@ def diff(cur: list[dict], prev: list[dict]) -> dict:
     changed = []
     for k in c:
         if k in p:
-            d = {f: c[k][f] - p[k][f] for f in excel.NUMERIC if c[k][f] != p[k][f]}
+            d = {f: c[k][f] - p[k][f] for f in BILLED if c[k][f] != p[k][f]}
             moved = c[k]["klant"] != p[k]["klant"]
             if d or moved:
                 changed.append({"servername": k[0], "klant": c[k]["klant"], "oud": p[k], "nieuw": c[k], "delta": d, "verplaatst": moved})
@@ -326,12 +324,12 @@ def overview(month: str, os_filter: str = "") -> dict:
     regels = []
     covered = set()
     for c in get_customers():
-        os_c = _combine_os(c.get("os", ""), os_filter)
+        os_c = os_filter  # OS wordt alleen getoond; een OS-filter per klant (v1.1) wordt genegeerd
         matched = select(export, c["filter"], os_c)
         covered.update(id(r) for r in matched)
         rows, excluded = split_excluded(matched, month)
-        regel = {"naam": c["naam"], "filter": c["filter"], "os": c.get("os", ""), "totaal": totals(rows), "uitgesloten": len(excluded)}
-        if comparable and (not c.get("os") or has_os(prev_month)):
+        regel = {"naam": c["naam"], "filter": c["filter"], "totaal": totals(rows), "uitgesloten": len(excluded)}
+        if comparable:
             prev_rows, _ = billable(prev_month, c["filter"], os_c)
             regel["vorig_totaal"] = totals(prev_rows)
             d = diff(rows, prev_rows)
@@ -515,7 +513,7 @@ def api_export(maand: str, os: str = ""):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Overzicht"
-    keys = ["vms", *excel.NUMERIC]
+    keys = ["vms", *BILLED]
     head = ["Klant", "Filter", "VM's", *LABELS.values()]
     if ov["vorige_maand"]:
         head += [f"Δ {h}" for h in ["VM's", *LABELS.values()]]
@@ -538,15 +536,15 @@ def api_export(maand: str, os: str = ""):
         used.add(title)
         s = wb.create_sheet(title)
         s.append(["servername", "OS", "klant", "cluster", *LABELS.values()])
-        rows, _ = billable(maand, k["filter"], _combine_os(k["os"], os))
+        rows, _ = billable(maand, k["filter"], os)
         for r in rows:
-            s.append([r["servername"], r["os"], r["klant"], r["cluster"], *[r[x] for x in excel.NUMERIC]])
+            s.append([r["servername"], r["os"], r["klant"], r["cluster"], *[r[x] for x in BILLED]])
     _, excluded = split_excluded([r for r in load(maand).rows if os_matches(r["os"], os)], maand)
     if excluded:
         s = wb.create_sheet("Uitgesloten")
         s.append(["servername", "klant", "opmerking", "t/m maand", *LABELS.values()])
         for r in excluded:
-            s.append([r["servername"], r["klant"], r["opmerking"], r["tot"], *[r[x] for x in excel.NUMERIC]])
+            s.append([r["servername"], r["klant"], r["opmerking"], r["tot"], *[r[x] for x in BILLED]])
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
