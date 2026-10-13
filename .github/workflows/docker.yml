@@ -73,3 +73,20 @@ jobs:
               gh release edit "$tag" --notes-file "$f"
             fi
           done
+
+  cleanup-releases:
+    # Releases die zijn samengevoegd in een latere release (docs/releases/samengevoegd.txt) verwijderen, met hun tag.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          [ -f docs/releases/samengevoegd.txt ] || exit 0
+          while read -r tag; do
+            [ -n "$tag" ] || continue
+            if gh release view "$tag" >/dev/null 2>&1; then
+              gh release delete "$tag" --cleanup-tag -y
+            fi
+          done < docs/releases/samengevoegd.txt
