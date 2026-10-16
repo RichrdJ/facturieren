@@ -399,7 +399,7 @@ function renderVm(){
   let h=`<div class=card><div class="row" style="justify-content:space-between"><h2 style="margin:0">VM's (${vm.vms.length}) <small class=muted style="font-weight:400">· ${n} mee in de export${weg?`, ${weg} weggelaten`:""}</small></h2>
     <div class=row><button class=sec onclick="vmAll(true)">Alles aan</button><button class=sec onclick="vmAll(false)">Alles uit</button><button id=vdl onclick="vmDownload()">Download Excel (${n} VM's)</button></div></div>`;
   if(prevN)h+=`<p class=muted style="margin:8px 0 0">${prevN} VM('s) staan uit omdat je ze de vorige keer voor ${esc(vm.klant)} hebt weggelaten.</p>`;
-  h+=`<div class=sumline id=vsum style="margin-top:10px"></div><div class=wrap><table id=t-vme><tr><th class=l data-nofilter>Mee</th><th class=l>VM</th><th class=l data-list>Klant</th><th>CPUs</th><th>Memory</th><th>Storage</th><th class=l>IPv4 Address</th><th class=l data-list>Status</th></tr>`+
+  h+=`<div class=wrap style="margin-top:10px"><table id=t-vme><tr><th class=l data-nofilter>Mee</th><th class=l>VM</th><th class=l data-list>Klant</th><th>CPUs</th><th>Memory</th><th>Storage</th><th class=l>IPv4 Address</th><th class=l data-list>Status</th></tr>`+
     vm.vms.map((x,i)=>`<tr${x.mee?"":" class=excl"}><td class=l><input type=checkbox ${x.mee?"checked":""} onchange="vmToggle(${i},this.checked)"></td>
       <td class="l${x.mee?"":" strike"}">${esc(x.VM)}${x.vorige?' <span class="pill x" title="vorige keer weggelaten">vorige keer uit</span>':""}</td>
       <td class="l map" title="${esc(x.Klant)}" data-f="${esc(x.Klant)}"><small class=muted>${esc(x.Klant)}</small></td>
@@ -407,11 +407,7 @@ function renderVm(){
       <td class=l>${esc(x["IPv4 Address"])||'<i class=muted>(leeg)</i>'}</td>
       <td class=l data-f="${esc(x.Powerstate||"(Leeg)")}"><small class=muted>${esc(x.Powerstate)}</small></td></tr>`).join("")+"</table></div></div>";
   $("#vres").innerHTML=h;
-  const t=$("#t-vme");enhance(t,"vme",true);vmSum();
-}
-function vmSum(){
-  const rows=vm.vms.filter(x=>x.mee),s=k=>rows.reduce((a,x)=>a+(Number(x[k])||0),0);
-  $("#vsum").innerHTML=`<span class=muted>In de export:</span> <b>${rows.length}</b> VM's · <b>${fmt(s("CPUs"))}</b> CPUs · <b>${fmt(s("Memory"))}</b> Memory · <b>${fmt(s("Storage"))}</b> Storage`;
+  const t=$("#t-vme");enhance(t,"vme",true);
 }
 function vmToggle(i,on){vm.vms[i].mee=on;renderVm()}
 function vmAll(on){
