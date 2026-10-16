@@ -21,6 +21,12 @@ Kleine webapp voor de maandelijkse facturatie op basis van de "VMs export 01-MM-
 - **Licht/donker** wissel je met ☀/☾ rechtsboven.
 - **Download xlsx** per maand: de export als nette xlsx (getallen als getal, opgemaakte kop, filter,
   vastgezette eerste rij), als `VMs export 01-MM-JJJJ.xlsx`. Een CSV kan ook los worden omgezet zonder op te slaan.
+- **VM-export voor de klant** (tabblad VM-export, los van de facturatie): upload de RVTools-exports
+  (`RVTools_export_all_….xlsx`, meerdere tegelijk) en kies een klant. De app neemt de VM's waarvan de map
+  (Folder in vCPU) of het attribuut `HIAB_BU_Separation` de klantnaam bevat, met CPUs, Memory (GiB), Storage
+  (som van de schijven in vDisk, GiB) en IPv4-adres. Vink aan welke VM's mee moeten en download
+  `Export_<Klant>_VMs_<dd-mm-jjjj_uummss>.xlsx` (Verdana 9, kopregel wit op zwart). De RVTools-bestanden worden
+  niet bewaard; wel onthoudt de app per klant welke VM's je de vorige keer hebt weggelaten.
 - **Download Excel** met het overzicht en per klant een tabblad met de VM's.
 
 ## Starten
@@ -50,7 +56,7 @@ service op de node blijft waar het volume staat.
 docker compose up -d --build
 ```
 
-Open daarna http://localhost:9898. Data staat in `./data` (exports, `klanten.json`, `uitsluitingen.json`, `notities.json`).
+Open daarna http://localhost:9898. Data staat in `./data` (exports, `klanten.json`, `uitsluitingen.json`, `notities.json`, `vmexport.json`).
 
 ## Inloggen
 

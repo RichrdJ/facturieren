@@ -11,7 +11,9 @@ import secrets
 import threading
 import time
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import openpyxl
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -19,13 +21,15 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import excel
+from . import excel, vmexport
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 EXPORTS_DIR = DATA_DIR / "exports"
 CUSTOMERS_FILE = DATA_DIR / "klanten.json"
 EXCLUSIONS_FILE = DATA_DIR / "uitsluitingen.json"
 NOTES_FILE = DATA_DIR / "notities.json"
+VMEXPORT_FILE = DATA_DIR / "vmexport.json"  # per klant: welke VM's de vorige keer zijn weggelaten
+TZ = ZoneInfo(os.environ.get("TZ_NAME", "Europe/Amsterdam"))
 STATIC_DIR = Path(__file__).parent / "static"
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "").lower() in ("1", "true", "yes")
@@ -403,6 +407,8 @@ async def api_upload(file: UploadFile = File(...), maand: str = Form("")):
         raise HTTPException(400, "Kon de maand niet uit de bestandsnaam halen; kies de maand handmatig.")
     path = _month_path(month)
     try:
+        if vmexport.is_rvtools(data, file.filename or ""):
+            raise HTTPException(400, "Dit is een RVTools-export. Die hoort bij het tabblad VM-export, niet bij de facturatie.")
         export = excel.parse(data, file.filename or "")
         if not excel.is_xlsx(data):
             # Kale CSV: bewaar als nette xlsx.
@@ -462,7 +468,7 @@ GROUP_FOLDER = re.compile(r"customer vms$", re.I)
 
 
 def customer_path(klant: str) -> list[str]:
-    """'/CyberCenter/PRH Customer VMs/KlantA/Locatie1' -> ['KlantA', 'Locatie1'] (datacenter en groepsmap eraf)."""
+    """'/Datacenter1/Groep Customer VMs/KlantA/Locatie1' -> ['KlantA', 'Locatie1'] (datacenter en groepsmap eraf)."""
     segs = [s for s in klant.split("/") if s.strip()][1:]
     if segs and GROUP_FOLDER.search(segs[0]):
         segs = segs[1:]
@@ -618,6 +624,58 @@ def api_export(maand: str, os: str = ""):
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="facturatie {dm(maand)}{" (OS-filter)" if os else ""}.xlsx"'},
+    )
+
+
+# ---------- VM-export voor klanten (RVTools, los van de facturatie) ----------
+
+def get_vmexport_state() -> dict:
+    if VMEXPORT_FILE.exists():
+        return json.loads(VMEXPORT_FILE.read_text())
+    return {}
+
+
+@app.get("/api/vmexport/state")
+def api_vmexport_state():
+    return get_vmexport_state()
+
+
+@app.post("/api/vmexport/parse")
+async def api_vmexport_parse(files: list[UploadFile] = File(...), klant: str = Form(...)):
+    """RVTools-bestanden lezen (alleen in het geheugen, niets wordt bewaard) en de VM's van de klant teruggeven."""
+    if not klant.strip():
+        raise HTTPException(400, "Vul een klantnaam in")
+    uploads = [(f.filename or "export.xlsx", await f.read()) for f in files]
+    result = vmexport.parse(uploads, klant)
+    if not result["bestanden"]:
+        raise HTTPException(400, "Geen bruikbare RVTools-export gevonden. " + " ".join(result["waarschuwingen"]))
+    result["weggelaten_vorige_keer"] = get_vmexport_state().get(klant.strip().lower(), {}).get("weggelaten", [])
+    return result
+
+
+class VmExportRequest(BaseModel):
+    klant: str
+    vms: list[dict]
+    weggelaten: list[str] = []
+
+
+@app.post("/api/vmexport/xlsx")
+def api_vmexport_xlsx(req: VmExportRequest):
+    klant = req.klant.strip()
+    if not klant:
+        raise HTTPException(400, "Vul een klantnaam in")
+    now = datetime.now(TZ)
+    with _lock:
+        state = get_vmexport_state()
+        state[klant.lower()] = {"klant": klant, "weggelaten": sorted(set(req.weggelaten), key=str.lower),
+                                "laatst": now.isoformat(timespec="seconds")}
+        VMEXPORT_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False))
+    safe = re.sub(r"[^\w.-]+", "_", klant).strip("_") or "Klant"
+    name = f"Export_{safe}_VMs_{now:%d-%m-%Y_%H%M%S}.xlsx"
+    return Response(
+        vmexport.to_xlsx(req.vms),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )
 
 

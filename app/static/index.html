@@ -88,6 +88,7 @@ tr.tot th{color:var(--fg);font-size:14px;border-top:2px solid var(--line);border
     <button data-tab="overzicht">Overzicht</button>
     <button data-tab="uitsluitingen">Uitsluitingen</button>
     <button data-tab="upload">Exports</button>
+    <button data-tab="vmexport">VM-export</button>
   </div>
   <label>Maand <select id="maand"></select></label>
   <button id="theme" title="Licht/donker">☾</button>
@@ -142,6 +143,19 @@ tr.tot th{color:var(--fg);font-size:14px;border-top:2px solid var(--line);border
     <span id="cmsg" class="muted"></span>
   </div>
   <div class="card"><h2>Opgeslagen exports</h2><table id="mlist"></table></div>
+</section>
+
+<section id="tab-vmexport" class="hidden">
+  <div class="card">
+    <h2>VM-export voor de klant</h2>
+    <p class="muted">Maak het maandelijkse VM-overzicht voor een klant uit de RVTools-exports (<code>RVTools_export_all_….xlsx</code>, meerdere tegelijk mag).
+      Dit staat los van de facturatie: de RVTools-bestanden worden alleen gelezen en niet bewaard.</p>
+    <div class="row" style="margin-bottom:10px"><label>Klant <input id="vk" list="vklanten" placeholder="bijv. KlantA" size="24"></label><datalist id="vklanten"></datalist>
+      <span class="muted" style="font-size:12px">VM's waarvan de map of HIAB_BU_Separation deze naam bevat.</span></div>
+    <div class="drop" id="vdrop">Sleep hier de RVTools-exports naartoe of <label style="color:var(--acc-fg);cursor:pointer;text-decoration:underline">kies bestanden<input type="file" id="vfile" accept=".xlsx" multiple hidden></label></div>
+    <p id="vmsg"></p>
+  </div>
+  <div id="vres"></div>
 </section>
 
   <footer class="muted" style="text-align:center;font-size:12px;padding:8px" id="versie"></footer>
@@ -298,7 +312,7 @@ function enhance(table,key,filters){
   if(filters){
     frow=document.createElement("tr");frow.className="frow";
     frow.innerHTML=ths.map((th,i)=>th.dataset.list!=null?`<td><button type=button class="sec mini lf" data-i="${i}"></button></td>`
-      :th.textContent.trim()?`<td><input data-i="${i}" placeholder="filter" value="${esc(st.f[i]||"")}"></td>`:"<td></td>").join("");
+      :th.textContent.trim()&&th.dataset.nofilter==null?`<td><input data-i="${i}" placeholder="filter" value="${esc(st.f[i]||"")}"></td>`:"<td></td>").join("");
     head.after(frow);
     count=document.createElement("div");count.className="muted tcount";table.closest(".wrap").after(count);
     frow.querySelectorAll("input").forEach(inp=>inp.oninput=()=>{st.f[inp.dataset.i]=inp.value;apply()});
@@ -365,6 +379,60 @@ function listFilter(btn,body,st,i,apply){
 async function quickAdd(){const f=$("#f").value.trim();const naam=prompt("Naam van de klant",f.split("/").pop());if(!naam)return;
   customers.push({naam,filter:f,os:""});await saveCustomers();refresh();}
 
+// ---- VM-export (RVTools) ----
+let vm=null;  // laatste resultaat: {klant, vms, ...}
+async function vmUpload(files){
+  const klant=$("#vk").value.trim();if(!klant){$("#vmsg").innerHTML=`<span class=down>Vul eerst een klantnaam in.</span>`;return}
+  const fd=new FormData();files.forEach(f=>fd.append("files",f));fd.append("klant",klant);
+  $("#vmsg").textContent=`Bezig met ${files.length} bestand(en)…`;$("#vres").innerHTML="";
+  let r;try{r=await api("/api/vmexport/parse",{method:"POST",body:fd})}catch(e){$("#vmsg").innerHTML=`<span class=down>✘ ${esc(e.message)}</span>`;return}
+  const prev=new Set((r.weggelaten_vorige_keer||[]).map(n=>n.toLowerCase()));
+  r.vms.forEach(x=>{x.mee=!prev.has(x.VM.toLowerCase());x.vorige=prev.has(x.VM.toLowerCase())});
+  vm={klant,...r};
+  $("#vmsg").innerHTML=`✔ ${r.vms.length} VM's van ${esc(klant)} gevonden in ${r.bestanden.map(b=>`${esc(b.naam)} (${b.vms})`).join(", ")}`+
+    (r.waarschuwingen.length?`<br><span class=down>${r.waarschuwingen.map(esc).join("<br>")}</span>`:"");
+  renderVm();
+}
+function renderVm(){
+  if(!vm)return;
+  const n=vm.vms.filter(x=>x.mee).length,weg=vm.vms.length-n,prevN=vm.vms.filter(x=>x.vorige).length;
+  let h=`<div class=card><div class="row" style="justify-content:space-between"><h2 style="margin:0">VM's (${vm.vms.length}) <small class=muted style="font-weight:400">· ${n} mee in de export${weg?`, ${weg} weggelaten`:""}</small></h2>
+    <div class=row><button class=sec onclick="vmAll(true)">Alles aan</button><button class=sec onclick="vmAll(false)">Alles uit</button><button id=vdl onclick="vmDownload()">Download Excel (${n} VM's)</button></div></div>`;
+  if(prevN)h+=`<p class=muted style="margin:8px 0 0">${prevN} VM('s) staan uit omdat je ze de vorige keer voor ${esc(vm.klant)} hebt weggelaten.</p>`;
+  h+=`<div class=sumline id=vsum style="margin-top:10px"></div><div class=wrap><table id=t-vme><tr><th class=l data-nofilter>Mee</th><th class=l>VM</th><th class=l data-list>Klant</th><th>CPUs</th><th>Memory</th><th>Storage</th><th class=l>IPv4 Address</th><th class=l data-list>Status</th></tr>`+
+    vm.vms.map((x,i)=>`<tr${x.mee?"":" class=excl"}><td class=l><input type=checkbox ${x.mee?"checked":""} onchange="vmToggle(${i},this.checked)"></td>
+      <td class="l${x.mee?"":" strike"}">${esc(x.VM)}${x.vorige?' <span class="pill x" title="vorige keer weggelaten">vorige keer uit</span>':""}</td>
+      <td class="l map" title="${esc(x.Klant)}" data-f="${esc(x.Klant)}"><small class=muted>${esc(x.Klant)}</small></td>
+      <td${x.mee?"":" class=strike"}>${fmt(x.CPUs)}</td><td${x.mee?"":" class=strike"}>${fmt(x.Memory)}</td><td${x.mee?"":" class=strike"}>${fmt(x.Storage)}</td>
+      <td class=l>${esc(x["IPv4 Address"])||'<i class=muted>(leeg)</i>'}</td>
+      <td class=l data-f="${esc(x.Powerstate||"(Leeg)")}"><small class=muted>${esc(x.Powerstate)}</small></td></tr>`).join("")+"</table></div></div>";
+  $("#vres").innerHTML=h;
+  const t=$("#t-vme");enhance(t,"vme",true);vmSum();
+}
+function vmSum(){
+  const rows=vm.vms.filter(x=>x.mee),s=k=>rows.reduce((a,x)=>a+(Number(x[k])||0),0);
+  $("#vsum").innerHTML=`<span class=muted>In de export:</span> <b>${rows.length}</b> VM's · <b>${fmt(s("CPUs"))}</b> CPUs · <b>${fmt(s("Memory"))}</b> Memory · <b>${fmt(s("Storage"))}</b> Storage`;
+}
+function vmToggle(i,on){vm.vms[i].mee=on;renderVm()}
+function vmAll(on){
+  // Alleen de rijen die nu zichtbaar zijn (na filteren) aan- of uitzetten.
+  const t=$("#t-vme");[...t.rows].slice(1).forEach(r=>{const cb=r.querySelector("input[type=checkbox]");
+    if(cb&&r.style.display!=="none"){const i=Number(cb.getAttribute("onchange").match(/\d+/)[0]);vm.vms[i].mee=on}});
+  renderVm();
+}
+async function vmDownload(){
+  const mee=vm.vms.filter(x=>x.mee);if(!mee.length){alert("Er staat geen enkele VM aan.");return}
+  const r=await fetch("/api/vmexport/xlsx",json("POST",{klant:vm.klant,vms:mee,weggelaten:vm.vms.filter(x=>!x.mee).map(x=>x.VM)}));
+  if(r.status===401){location.replace("/login");return}
+  if(!r.ok){alert("Mislukt: "+((await r.json().catch(()=>({}))).detail||r.statusText));return}
+  const name=(r.headers.get("content-disposition")||"").match(/filename="(.+)"/)?.[1]||"export.xlsx";
+  const a=document.createElement("a");a.href=URL.createObjectURL(await r.blob());a.download=name;a.click();
+  $("#vmsg").innerHTML+=`<br>✔ Gedownload: ${esc(name)} (${mee.length} VM's)`;
+}
+$("#vfile").onchange=e=>{vmUpload([...e.target.files]);e.target.value=""};
+const vd=$("#vdrop");vd.ondragover=e=>{e.preventDefault();vd.classList.add("over")};vd.ondragleave=()=>vd.classList.remove("over");
+vd.ondrop=e=>{e.preventDefault();vd.classList.remove("over");vmUpload([...e.dataTransfer.files])};
+
 // ---- notities ----
 let noteFor=null;
 function editNote(name){noteFor=name;$("#nserver").textContent=name;$("#ntext").value=noteOf(name);$("#ndlg").showModal();$("#ntext").focus()}
@@ -417,6 +485,7 @@ $("#savee").onclick=async()=>{try{await saveExclusions();renderExclusions();$("#
 
 // ---- klanten (bewaard vanuit het tabblad Klant) ----
 function renderChips(){
+  $("#vklanten").innerHTML=customers.map(c=>`<option value="${esc(c.naam)}">`).join("");
   $("#chips").innerHTML=customers.length?'<span class="muted">Bewaard:</span> '+customers.map((c,i)=>`<button class="sec mini" onclick="openCustomer(${i})">${esc(c.naam)}</button>`).join(" "):"";
 }
 function openCustomer(i){$("#f").value=customers[i].filter;report()}
@@ -425,6 +494,9 @@ async function saveCustomers(){customers=await api("/api/customers",json("PUT",c
 
 // ---- exports ----
 async function upload(files){
+  // RVTools-bestanden horen bij de VM-export, niet bij de facturatie.
+  const rv=files.filter(f=>/^rvtools/i.test(f.name));files=files.filter(f=>!/^rvtools/i.test(f.name));
+  if(rv.length){show("vmexport");vmUpload(rv);if(!files.length)return}
   for(const file of files){
     const fd=new FormData();fd.append("file",file);fd.append("maand",files.length===1?$("#um").value:"");
     try{const r=await api("/api/upload",{method:"POST",body:fd});
@@ -449,7 +521,10 @@ $("#theme").onclick=()=>{toggleTheme();setThemeIcon()};setThemeIcon();
 $("#logout").onclick=async()=>{await fetch("/api/logout",{method:"POST"});location.replace("/login")};
 (async()=>{const info=await api("/api/info");if(info.auth)$("#logout").classList.remove("hidden");
   $("#versie").innerHTML=`Facturieren <a href="https://github.com/RichrdJ/facturieren/releases" target="_blank" rel="noopener">${esc(info.versie)}</a>`;
-  [customers,exclusions,notes]=await Promise.all([api("/api/customers"),api("/api/exclusions"),api("/api/notes")]);renderChips();await loadMonths(false)})();
+  [customers,exclusions,notes]=await Promise.all([api("/api/customers"),api("/api/exclusions"),api("/api/notes")]);
+  // VM-export: laatst gebruikte klant voorinvullen.
+  api("/api/vmexport/state").then(st=>{const last=Object.values(st).sort((a,b)=>(b.laatst||"").localeCompare(a.laatst||""))[0];
+    if(last&&!$("#vk").value)$("#vk").value=last.klant}).catch(()=>{});renderChips();await loadMonths(false)})();
 </script>
 </body>
 </html>
