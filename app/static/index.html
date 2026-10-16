@@ -334,6 +334,7 @@ function enhance(table,key,filters){
       const all=new Set(body.map(r=>listVal(r.cells[b.dataset.i])));const n=[...all].filter(v=>!ex.includes(v)).length;
       b.innerHTML=`<span>${ex.length?`${n} van ${all.size}`:"Alle"}</span><span>▾</span>`;b.classList.toggle("on",!!ex.length)});
     if(count)count.textContent=shown<body.length?`${shown} van ${body.length} getoond`:"";
+    table._onApply?.();
     if(trow){
       const billed=rows.filter(r=>r.style.display!=="none"&&!r.classList.contains("excl"));
       const filtered=shown<body.length;
@@ -395,9 +396,9 @@ async function vmUpload(files){
 }
 function renderVm(){
   if(!vm)return;
-  const n=vm.vms.filter(x=>x.mee).length,weg=vm.vms.length-n,prevN=vm.vms.filter(x=>x.vorige).length;
+  const n=vm.vms.filter(x=>x.mee).length,weg=vm.vms.length-n,prevN=vm.vms.filter(x=>x.vorige&&!x.mee).length;
   let h=`<div class=card><div class="row" style="justify-content:space-between"><h2 style="margin:0">VM's (${vm.vms.length}) <small class=muted style="font-weight:400">· ${n} mee in de export${weg?`, ${weg} weggelaten`:""}</small></h2>
-    <div class=row><button class=sec onclick="vmAll(true)">Alles aan</button><button class=sec onclick="vmAll(false)">Alles uit</button><button id=vdl onclick="vmDownload()">Download Excel (${n} VM's)</button></div></div>`;
+    <div class=row><button id=vdl onclick="vmDownload()">Download Excel (${n} VM's)</button></div></div>`;
   if(prevN)h+=`<p class=muted style="margin:8px 0 0">${prevN} VM('s) staan uit omdat je ze de vorige keer voor ${esc(vm.klant)} hebt weggelaten.</p>`;
   h+=`<div class=wrap style="margin-top:10px"><table id=t-vme><tr><th class=l data-nofilter>Mee</th><th class=l>VM</th><th class=l data-list>Klant</th><th>CPUs</th><th>Memory</th><th>Storage</th><th class=l>IPv4 Address</th><th class=l data-list>Status</th></tr>`+
     vm.vms.map((x,i)=>`<tr${x.mee?"":" class=excl"}><td class=l><input type=checkbox ${x.mee?"checked":""} onchange="vmToggle(${i},this.checked)"></td>
@@ -407,12 +408,19 @@ function renderVm(){
       <td class=l>${esc(x["IPv4 Address"])||'<i class=muted>(leeg)</i>'}</td>
       <td class=l data-f="${esc(x.Powerstate||"(Leeg)")}"><small class=muted>${esc(x.Powerstate)}</small></td></tr>`).join("")+"</table></div></div>";
   $("#vres").innerHTML=h;
-  const t=$("#t-vme");enhance(t,"vme",true);
+  // Selectievak in de filterregel: alle zichtbare VM's aan/uit (streepje = deels).
+  const t=$("#t-vme");
+  t._onApply=()=>{const cb=t.querySelector("#vall");if(!cb)return;
+    const vis=[...t.rows].slice(2).filter(r=>r.style.display!=="none"&&!r.classList.contains("fixed")).map(r=>r.querySelector("input[type=checkbox]")).filter(Boolean);
+    const on=vis.filter(c=>c.checked).length;cb.checked=vis.length>0&&on===vis.length;cb.indeterminate=on>0&&on<vis.length};
+  enhance(t,"vme",true);
+  const fc=t.querySelector("tr.frow").cells[0];fc.innerHTML=`<input type=checkbox id=vall title="Alle zichtbare VM's aan/uit">`;
+  $("#vall").onchange=e=>vmAll(e.target.checked);t._onApply();
 }
 function vmToggle(i,on){vm.vms[i].mee=on;renderVm()}
 function vmAll(on){
   // Alleen de rijen die nu zichtbaar zijn (na filteren) aan- of uitzetten.
-  const t=$("#t-vme");[...t.rows].slice(1).forEach(r=>{const cb=r.querySelector("input[type=checkbox]");
+  const t=$("#t-vme");[...t.rows].slice(1).filter(r=>!r.classList.contains("frow")).forEach(r=>{const cb=r.querySelector("input[type=checkbox]");
     if(cb&&r.style.display!=="none"){const i=Number(cb.getAttribute("onchange").match(/\d+/)[0]);vm.vms[i].mee=on}});
   renderVm();
 }
