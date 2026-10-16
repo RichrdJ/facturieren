@@ -54,7 +54,7 @@ _cache: dict[str, tuple[float, excel.Export]] = {}
 
 # ---------- inloggen (alleen actief als APP_PASSWORD is gezet) ----------
 
-PUBLIC_PATHS = {"/login", "/api/login", "/healthz"}
+PUBLIC_PATHS = {"/login", "/api/login", "/healthz", "/favicon.ico"}
 _fails: dict[str, list[float]] = {}  # per adres: [aantal mislukt, geblokkeerd tot]
 _global_fails: list[float] = []      # tijdstippen van recente mislukte pogingen
 _fails_lock = threading.Lock()
@@ -677,6 +677,11 @@ def api_vmexport_xlsx(req: VmExportRequest):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return FileResponse(STATIC_DIR / "favicon.ico", media_type="image/x-icon")
 
 
 @app.get("/")
